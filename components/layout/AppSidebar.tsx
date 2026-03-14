@@ -28,9 +28,9 @@ export function AppSidebar({ onNavigate }: AppSidebarProps) {
   };
 
   return (
-    <aside className="w-64 bg-slate-900 flex flex-col flex-shrink-0 h-full">
+    <aside className="w-64 bg-slate-900 flex flex-col shrink-0 h-full">
       {/* Logo */}
-      <div className="h-16 flex items-center px-5 border-b border-slate-700/60 flex-shrink-0">
+      <div className="h-16 flex items-center px-5 border-b border-slate-700/60shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="p-1.5 bg-blue-500 rounded-md">
             <Truck className="w-4 h-4 text-white" />
@@ -62,7 +62,7 @@ export function AppSidebar({ onNavigate }: AppSidebarProps) {
             >
               <item.icon
                 className={cn(
-                  "w-4.5 h-4.5 flex-shrink-0",
+                  "w-4.5 h-4.5 shrink-0",
                   active
                     ? "text-white"
                     : "text-slate-400 group-hover:text-white",
@@ -76,7 +76,7 @@ export function AppSidebar({ onNavigate }: AppSidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="px-5 py-4 border-t border-slate-700/60 flex-shrink-0">
+      <div className="px-5 py-4 border-t border-slate-700/60 shrink-0">
         <p className="text-slate-600 text-xs">TMS v1.0.0 · Beta</p>
       </div>
     </aside>

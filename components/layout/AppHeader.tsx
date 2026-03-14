@@ -25,7 +25,7 @@ export function AppHeader({ onMenuToggle }: AppHeaderProps) {
   const title = getPageTitle(pathname);
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 flex-shrink-0 z-10">
+    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-10">
       <div className="flex items-center gap-4">
         {/* Mobile menu toggle */}
         <button
