@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import dayjs from "dayjs";
 import Calendar from "./components/Calendar";
 import ShipmentsTable from "./components/ShipmentsTable";
+import ShipmentForm from "./components/ShipmentForm";
 import { DndContext } from "@dnd-kit/core";
 import type { Shipment } from "@/types/planning";
 import type { Transport } from "@/types/transport";
-import { GripVertical, Package } from "lucide-react";
+import type { CalendarEvent } from "@ilamy/calendar";
+import { GripVertical, Package, Plus } from "lucide-react";
+import Button from "@mui/joy/Button";
+import { useDialog } from "@/hooks/useDialog";
+import { useTrucks, useUpdateTruck } from "@/hooks/useTrucks";
+import { toast } from "react-toastify";
 
 /* ── Draggable Shipment Card ─────────────────────────────────────── */
 function ShipmentCard({ shipment }: { shipment: Shipment }) {
@@ -36,12 +43,55 @@ function ShipmentCard({ shipment }: { shipment: Shipment }) {
 
 export function DashboardView() {
   // ── Demo data (replace with real data) ────────────────────────────
-  const [shipments] = useState<Shipment[]>([]);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
   const [transports] = useState<Transport[]>([]);
+  const shipmentDialog = useDialog();
+  const { data: trucks = [] } = useTrucks();
+  const updateTruck = useUpdateTruck();
+
+  // ── Map trucks → CalendarEvents ───────────────────────────────────
+  const truckEvents = useMemo<CalendarEvent[]>(() => {
+    return trucks.map((t) => {
+      const start = dayjs(`${t.ladedatum}T${t.ladezeit || "08:00"}:00`);
+      const end = start.add(1, "hour");
+      const title = t.fraechter
+        ? `${t.kennzeichen} \u00b7 ${t.fraechter.name}`
+        : t.kennzeichen;
+      return {
+        id: `truck-${t.id}`,
+        title,
+        description: t.fahrer || "",
+        start,
+        end,
+        allDay: false,
+        backgroundColor: t.farbe || "#155dfc",
+        color: "#fff",
+        truckId: t.id,
+        truckData: t,
+      } as unknown as CalendarEvent;
+    });
+  }, [trucks]);
 
   // ── Derived state ─────────────────────────────────────────────────────
 
   // ── Handlers ──────────────────────────────────────────────────────────
+  const handleEventUpdate = (event: CalendarEvent) => {
+    const ext = event as unknown as Record<string, unknown>;
+    const truckId = ext.truckId as string | undefined;
+    if (!truckId) return;
+
+    const start = dayjs(event.start as unknown as string);
+    updateTruck.mutate(
+      {
+        id: truckId,
+        ladedatum: start.format("YYYY-MM-DD"),
+        ladezeit: start.format("HH:mm"),
+      },
+      {
+        onError: () => toast.error("Fehler beim Verschieben"),
+      },
+    );
+  };
 
   return (
     <DndContext
@@ -62,9 +112,22 @@ export function DashboardView() {
               <h3 className="text-sm font-semibold text-[#0f172b]">
                 Sendeaufträge
               </h3>
-              <span className="ml-auto text-xs text-[#57688e]">
-                {shipments.length}
-              </span>
+              <Button
+                size="sm"
+                variant="plain"
+                startDecorator={<Plus className="h-3 w-3" />}
+                onClick={() => shipmentDialog.onOpen()}
+                sx={{
+                  ml: "auto",
+                  fontSize: "0.7rem",
+                  color: "#57688e",
+                  minHeight: 0,
+                  px: 0.75,
+                  py: 0.25,
+                }}
+              >
+                Neuer Auftrag
+              </Button>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
               {shipments.length === 0 ? (
@@ -79,7 +142,7 @@ export function DashboardView() {
 
           {/* Calendar */}
           <div className="flex-1 min-w-0 h-full mx-4 my-3 rounded-md border border-[#0f172b]/10 overflow-hidden">
-            <Calendar />
+            <Calendar events={truckEvents} onEventUpdate={handleEventUpdate} />
           </div>
         </div>
 
@@ -87,6 +150,12 @@ export function DashboardView() {
           <ShipmentsTable transports={transports} />
         </div>
       </div>
+
+      <ShipmentForm
+        open={shipmentDialog.open}
+        onClose={shipmentDialog.onClose}
+        onSubmit={(s) => setShipments((prev) => [...prev, s])}
+      />
     </DndContext>
   );
 }

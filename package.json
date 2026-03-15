@@ -19,6 +19,7 @@
     "@mui/joy": "^5.0.0-beta.52",
     "@radix-ui/react-slot": "^1.2.4",
     "@supabase/supabase-js": "^2.99.1",
+    "@tanstack/react-query": "^5.90.21",
     "@types/leaflet": "^1.9.21",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -28,6 +29,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-leaflet": "^5.0.0",
+    "react-toastify": "^11.0.5",
     "svix": "^1.88.0",
     "tailwind-merge": "^3.5.0"
   },
