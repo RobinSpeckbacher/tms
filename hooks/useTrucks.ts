@@ -63,6 +63,30 @@ function useSupabase() {
   };
 }
 
+/* ── Next unique 5-digit reference ─────────────────────────────────── */
+export function useNextTruckRef() {
+  const getSupabase = useSupabase();
+
+  return useQuery<string>({
+    queryKey: ["trucks", "nextRef"],
+    queryFn: async () => {
+      const supabase = await getSupabase();
+      const { data, error } = await supabase
+        .from("trucks")
+        .select("interne_ref");
+
+      if (error) throw error;
+
+      let max = 10000;
+      for (const row of data ?? []) {
+        const n = parseInt(row.interne_ref, 10);
+        if (!isNaN(n) && n > max) max = n;
+      }
+      return String(max + 1);
+    },
+  });
+}
+
 /* ── Fetch all trucks ─────────────────────────────────────────────── */
 export function useTrucks() {
   const getSupabase = useSupabase();

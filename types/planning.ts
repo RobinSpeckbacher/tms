@@ -19,7 +19,15 @@ export interface Shipment {
   id: string;
   referenz: string;
   ladeort: string;
+  ladePlz?: string;
+  ladeAdresse?: string;
+  ladeLand?: string;
   entladeort: string;
+  entladePlz?: string;
+  entladeAdresse?: string;
+  entladeLand?: string;
+  /** References Unternehmen.id */
+  kundeId?: string;
   /** ISO datetime */
   start: string;
   /** ISO datetime */
@@ -27,6 +35,14 @@ export interface Shipment {
   status: ShipmentStatus;
   /** Payload weight in kg */
   gewicht?: number;
+  /** e.g. "europalette", "industriepalette", "gitterbox", "colli", "sonstige" */
+  packungseinheit?: string;
+  /** Number of packaging units */
+  anzahl?: number;
+  /** Loading meters */
+  lademeter?: number;
+  /** Sale price */
+  verkaufspreis?: number;
   /** Coordinates for the loading point */
   ladeortCoords?: LatLng;
   /** Coordinates for the unloading point */

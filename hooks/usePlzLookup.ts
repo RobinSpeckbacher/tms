@@ -34,3 +34,29 @@ export function usePlzLookup(query: string) {
     enabled: query.length >= 2,
   });
 }
+
+/**
+ * Lookup PLZ entries by city name prefix (min 2 chars).
+ * Returns matching { plz, ort, land } rows.
+ */
+export function useOrtLookup(query: string) {
+  const { getToken } = useAuth();
+
+  return useQuery<PlzEntry[]>({
+    queryKey: ["plz_verzeichnis_ort", query],
+    queryFn: async () => {
+      const token = await getToken();
+      const supabase = token ? createAuthClient(token) : createClient();
+      const { data, error } = await supabase
+        .from("plz_verzeichnis")
+        .select("id, plz, ort, land")
+        .ilike("ort", `${query}%`)
+        .order("ort")
+        .limit(15);
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: query.length >= 2,
+  });
+}

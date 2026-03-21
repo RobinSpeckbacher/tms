@@ -26,16 +26,9 @@ import {
   useCreateTruck,
   useUpdateTruck,
   useDeleteTruck,
+  useNextTruckRef,
 } from "@/hooks/useTrucks";
 import type { Unternehmen } from "@/hooks/useUnternehmen";
-
-/* ── Helpers ──────────────────────────────────────────────────────── */
-function generateRef() {
-  const d = dayjs().format("YYMMDD");
-  const ts = Date.now().toString(36).slice(-4).toUpperCase();
-  const r = Math.random().toString(36).substring(2, 5).toUpperCase();
-  return `TR-${d}-${ts}${r}`;
-}
 
 const inputSx = {
   "--Input-focusedHighlight": "#155dfc",
@@ -95,16 +88,23 @@ const STATUS_OPTIONS: { value: TruckStatus; label: string; color: string }[] = [
 ];
 
 /* ── Component ─────────────────────────────────────────────────────── */
-export default function TruckForm({
+export default function TruckForm(props: TruckFormProps) {
+  if (!props.open) return null;
+
+  const resetKey = `${props.selectedEvent?.id ?? "new"}`;
+  return <TruckFormInner key={resetKey} {...props} />;
+}
+
+function TruckFormInner({
   open,
   selectedEvent,
   onAdd,
-  onUpdate: _onUpdate,
   onDelete,
   onClose,
 }: TruckFormProps) {
   const isEdit = !!selectedEvent?.id;
   const { data: fahrzeugTypen = [] } = useFahrzeugTypen();
+  const { data: nextRef = "" } = useNextTruckRef();
   const createTruck = useCreateTruck();
   const updateTruck = useUpdateTruck();
   const deleteTruck = useDeleteTruck();
@@ -127,7 +127,7 @@ export default function TruckForm({
           telefonFahrer: (truck.telefon_fahrer as string) || "",
           fahrzeugTyp: (truck.fahrzeug_typ_id as string) || "sattelzug",
           bgColor: (truck.farbe as string) || "#155dfc",
-          ref: (truck.interne_ref as string) || generateRef(),
+          ref: (truck.interne_ref as string) || nextRef,
           kundenRef: (truck.kunden_ref as string) || "",
           startDate: s.format("YYYY-MM-DD"),
           startTime:
@@ -155,7 +155,7 @@ export default function TruckForm({
         telefonFahrer: "",
         fahrzeugTyp: "sattelzug",
         bgColor: selectedEvent.backgroundColor || "#155dfc",
-        ref: (ext.ref as string) || generateRef(),
+        ref: (ext.ref as string) || nextRef,
         kundenRef: "",
         startDate: s.format("YYYY-MM-DD"),
         startTime: s.format("HH:mm"),
@@ -177,7 +177,7 @@ export default function TruckForm({
       telefonFahrer: "",
       fahrzeugTyp: "sattelzug",
       bgColor: "#155dfc",
-      ref: generateRef(),
+      ref: nextRef,
       kundenRef: "",
       startDate: dayjs().format("YYYY-MM-DD"),
       startTime: "08:00",
@@ -191,7 +191,7 @@ export default function TruckForm({
       gesamtpreis: "",
       kosten: "",
     };
-  }, [selectedEvent]);
+  }, [selectedEvent, nextRef]);
 
   // ── Fahrzeug
   const [kennzeichen, setKennzeichen] = useState(initial.kennzeichen);
@@ -235,37 +235,13 @@ export default function TruckForm({
     return isNaN(g) ? "–" : `${g.toFixed(2)} €`;
   }, [gesamtpreis, kosten]);
 
-  // Reset
-  const resetKey = `${open}-${selectedEvent?.id ?? "new"}`;
-  useMemo(() => {
-    setKennzeichen(initial.kennzeichen);
-    setFraechter(initial.fraechter);
-    setFahrer(initial.fahrer);
-    setTelefonFahrer(initial.telefonFahrer);
-    setFahrzeugTyp(initial.fahrzeugTyp);
-    setBgColor(initial.bgColor);
-    setKundenRef(initial.kundenRef);
-    setLadedatum(initial.startDate);
-    setLadezeit(initial.startTime);
-    setEntladedatum(initial.entladedatum);
-    setEntladezeit(initial.entladezeit);
-    setStatus(initial.status);
-    setMaxPaletten(initial.maxPaletten);
-    setMaxGewicht(initial.maxGewicht);
-    setLademeter(initial.lademeter);
-    setPreisProKm(initial.preisProKm);
-    setGesamtpreis(initial.gesamtpreis);
-    setKosten(initial.kosten);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetKey]);
-
   if (!open) return null;
 
   const handleSubmit = async () => {
     if (!kennzeichen.trim()) return;
 
     const input = {
-      interne_ref: isEdit ? interneRef : generateRef(),
+      interne_ref: interneRef,
       kunden_ref: kundenRef.trim() || undefined,
       kennzeichen: kennzeichen.trim(),
       fraechter_id: fraechter?.id ?? null,

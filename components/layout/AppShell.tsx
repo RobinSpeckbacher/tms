@@ -16,7 +16,7 @@ export function AppShell({ children }: AppShellProps) {
   const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-white">
       {/* Mobile backdrop */}
       {isSidebarOpen && (
         <div
