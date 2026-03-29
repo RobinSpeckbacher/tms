@@ -6,7 +6,11 @@ import { MapPin, Package, Euro } from "lucide-react";
 import SlideOver from "@/components/common/SlideOver";
 import PlzOrtInput from "@/components/common/PlzOrtInput";
 import UnternehmenAutocomplete from "@/components/common/UnternehmenAutocomplete";
-import { useCreateSendung, useUpdateSendung, type SendungRow } from "@/hooks/useSendungen";
+import {
+  useCreateSendung,
+  useUpdateSendung,
+  type SendungRow,
+} from "@/hooks/useSendungen";
 import { toast } from "react-toastify";
 import Button from "@mui/joy/Button";
 import Input from "@mui/joy/Input";
@@ -60,7 +64,11 @@ function Field({
 /* ── Lademeter lookup per unit ─────────────────────────────────────── */
 const PACKUNGSEINHEITEN = [
   { value: "europalette", label: "Europalette (120×80)", ldmPerUnit: 0.4 },
-  { value: "industriepalette", label: "Industriepalette (120×100)", ldmPerUnit: 0.5 },
+  {
+    value: "industriepalette",
+    label: "Industriepalette (120×100)",
+    ldmPerUnit: 0.5,
+  },
   { value: "gitterbox", label: "Gitterbox (124×84)", ldmPerUnit: 0.4 },
   { value: "colli", label: "Colli / Karton", ldmPerUnit: 0 },
   { value: "sonstige", label: "Sonstige", ldmPerUnit: 0 },
@@ -86,7 +94,15 @@ export default function ShipmentForm({
   // Kunde
   const [kunde, setKunde] = useState<Unternehmen | null>(
     sendung?.kunde
-      ? ({ id: sendung.kunde.id, name: sendung.kunde.name, kundennummer: sendung.kunde.kundennummer } as Unternehmen)
+      ? ({
+          id: sendung.kunde.id,
+          name: sendung.kunde.name,
+          kundennummer: sendung.kunde.kundennummer,
+          adresse: sendung.kunde.adresse,
+          plz: sendung.kunde.plz,
+          ort: sendung.kunde.ort,
+          land: sendung.kunde.land,
+        } as Unternehmen)
       : null,
   );
 
@@ -102,21 +118,37 @@ export default function ShipmentForm({
   // Entladeort
   const [entladePlz, setEntladePlz] = useState(sendung?.entlade_plz ?? "");
   const [entladeort, setEntladeort] = useState(sendung?.entlade_ort ?? "");
-  const [entladeAdresse, setEntladeAdresse] = useState(sendung?.entlade_adresse ?? "");
+  const [entladeAdresse, setEntladeAdresse] = useState(
+    sendung?.entlade_adresse ?? "",
+  );
   const [entladeLand, setEntladeLand] = useState(sendung?.entlade_land ?? "AT");
 
   // Details
-  const [gewicht, setGewicht] = useState(sendung?.gewicht != null ? String(sendung.gewicht) : "");
-  const [packungseinheit, setPackungseinheit] = useState(sendung?.packungseinheit ?? "europalette");
-  const [anzahl, setAnzahl] = useState(sendung?.anzahl != null ? String(sendung.anzahl) : "");
-  const [lademeterOverride, setLademeterOverride] = useState(sendung?.lademeter != null ? String(sendung.lademeter) : "");
-  const [startDate, setStartDate] = useState(sendung?.ladedatum ?? dayjs().format("YYYY-MM-DD"));
+  const [gewicht, setGewicht] = useState(
+    sendung?.gewicht != null ? String(sendung.gewicht) : "",
+  );
+  const [packungseinheit, setPackungseinheit] = useState(
+    sendung?.packungseinheit ?? "europalette",
+  );
+  const [anzahl, setAnzahl] = useState(
+    sendung?.anzahl != null ? String(sendung.anzahl) : "",
+  );
+  const [lademeterOverride, setLademeterOverride] = useState(
+    sendung?.lademeter != null ? String(sendung.lademeter) : "",
+  );
+  const [startDate, setStartDate] = useState(
+    sendung?.ladedatum ?? dayjs().format("YYYY-MM-DD"),
+  );
   const [startTime, setStartTime] = useState(sendung?.ladezeit ?? "08:00");
-  const [endDate, setEndDate] = useState(sendung?.entladedatum ?? dayjs().format("YYYY-MM-DD"));
+  const [endDate, setEndDate] = useState(
+    sendung?.entladedatum ?? dayjs().format("YYYY-MM-DD"),
+  );
   const [endTime, setEndTime] = useState(sendung?.entladezeit ?? "17:00");
 
   // Kosten
-  const [verkaufspreis, setVerkaufspreis] = useState(sendung?.verkaufspreis != null ? String(sendung.verkaufspreis) : "");
+  const [verkaufspreis, setVerkaufspreis] = useState(
+    sendung?.verkaufspreis != null ? String(sendung.verkaufspreis) : "",
+  );
 
   // ── Auto-calculated Lademeter
   const lademeter = useMemo(() => {
@@ -165,9 +197,14 @@ export default function ShipmentForm({
     if (missing.length > 0) {
       toast.error(`Bitte ausfüllen: ${missing.join(", ")}`);
       if (
-        !ladePlz.trim() || !ladeort.trim() || !ladeLand.trim() ||
-        !entladePlz.trim() || !entladeort.trim() || !entladeLand.trim()
-      ) setActiveTab(0);
+        !ladePlz.trim() ||
+        !ladeort.trim() ||
+        !ladeLand.trim() ||
+        !entladePlz.trim() ||
+        !entladeort.trim() ||
+        !entladeLand.trim()
+      )
+        setActiveTab(0);
       return;
     }
 
@@ -195,12 +232,16 @@ export default function ShipmentForm({
 
     const options = {
       onSuccess: () => {
-        toast.success(isEdit ? "Sendeauftrag aktualisiert" : "Sendeauftrag erstellt");
+        toast.success(
+          isEdit ? "Sendeauftrag aktualisiert" : "Sendeauftrag erstellt",
+        );
         resetForm();
         onClose();
       },
       onError: () => {
-        toast.error(isEdit ? "Fehler beim Aktualisieren" : "Fehler beim Erstellen");
+        toast.error(
+          isEdit ? "Fehler beim Aktualisieren" : "Fehler beim Erstellen",
+        );
       },
     };
 
@@ -331,7 +372,11 @@ export default function ShipmentForm({
                   color: "#57688e",
                   borderColor: "#d5dbe8",
                   fontSize: "0.75rem",
-                  "&:hover": { bgcolor: "#f1f5f9", borderColor: "#155dfc", color: "#155dfc" },
+                  "&:hover": {
+                    bgcolor: "#f1f5f9",
+                    borderColor: "#155dfc",
+                    color: "#155dfc",
+                  },
                 }}
               >
                 → Ladeort übernehmen
@@ -351,7 +396,11 @@ export default function ShipmentForm({
                   color: "#57688e",
                   borderColor: "#d5dbe8",
                   fontSize: "0.75rem",
-                  "&:hover": { bgcolor: "#f1f5f9", borderColor: "#155dfc", color: "#155dfc" },
+                  "&:hover": {
+                    bgcolor: "#f1f5f9",
+                    borderColor: "#155dfc",
+                    color: "#155dfc",
+                  },
                 }}
               >
                 → Entladeort übernehmen
@@ -364,7 +413,11 @@ export default function ShipmentForm({
       <Divider sx={{ mb: 1 }} />
 
       {/* ── Tabs ────────────────────────────────────────────────────── */}
-      <Tabs value={activeTab} onChange={(_e, val) => setActiveTab(val as number)} sx={{ bgcolor: "transparent" }}>
+      <Tabs
+        value={activeTab}
+        onChange={(_e, val) => setActiveTab(val as number)}
+        sx={{ bgcolor: "transparent" }}
+      >
         <TabList
           size="sm"
           sx={{
@@ -390,7 +443,14 @@ export default function ShipmentForm({
           <Stack spacing={2}>
             <Typography
               level="body-xs"
-              sx={{ color: submitted && (!ladePlz.trim() || !ladeort.trim() || !ladeLand.trim()) ? "#ef4444" : "#57688e", fontWeight: 600 }}
+              sx={{
+                color:
+                  submitted &&
+                  (!ladePlz.trim() || !ladeort.trim() || !ladeLand.trim())
+                    ? "#ef4444"
+                    : "#57688e",
+                fontWeight: 600,
+              }}
             >
               Ladeort *
             </Typography>
@@ -403,7 +463,10 @@ export default function ShipmentForm({
               onOrtChange={setLadeort}
               onLandChange={setLadeLand}
               required
-              error={submitted && (!ladePlz.trim() || !ladeort.trim() || !ladeLand.trim())}
+              error={
+                submitted &&
+                (!ladePlz.trim() || !ladeort.trim() || !ladeLand.trim())
+              }
             />
 
             <Field label="Adresse">
@@ -420,7 +483,16 @@ export default function ShipmentForm({
 
             <Typography
               level="body-xs"
-              sx={{ color: submitted && (!entladePlz.trim() || !entladeort.trim() || !entladeLand.trim()) ? "#ef4444" : "#57688e", fontWeight: 600 }}
+              sx={{
+                color:
+                  submitted &&
+                  (!entladePlz.trim() ||
+                    !entladeort.trim() ||
+                    !entladeLand.trim())
+                    ? "#ef4444"
+                    : "#57688e",
+                fontWeight: 600,
+              }}
             >
               Entladeort *
             </Typography>
@@ -525,7 +597,10 @@ export default function ShipmentForm({
                 size="sm"
                 value={packungseinheit}
                 onChange={(_e, val) => val && setPackungseinheit(val)}
-                sx={{ "--Select-focusedHighlight": "#155dfc", color: "#0f172b" }}
+                sx={{
+                  "--Select-focusedHighlight": "#155dfc",
+                  color: "#0f172b",
+                }}
               >
                 {PACKUNGSEINHEITEN.map((p) => (
                   <Option key={p.value} value={p.value}>

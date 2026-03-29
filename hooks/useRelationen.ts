@@ -3,58 +3,20 @@ import { useAuth } from "@clerk/nextjs";
 import { createClient, createAuthClient } from "@/lib/supabase/client";
 
 /* ── Types ─────────────────────────────────────────────────────────── */
-export interface SendungRow {
+export interface Relation {
   id: string;
-  referenz: string;
-  kunde_id: string | null;
-  kunde?: { id: string; name: string; kundennummer: string; adresse: string; plz: string; ort: string; land: string } | null;
-  lade_plz: string | null;
-  lade_ort: string;
-  lade_adresse: string | null;
-  lade_land: string | null;
-  entlade_plz: string | null;
-  entlade_ort: string;
-  entlade_adresse: string | null;
-  entlade_land: string | null;
-  ladedatum: string;
-  ladezeit: string | null;
-  entladedatum: string;
-  entladezeit: string | null;
-  gewicht: number | null;
-  packungseinheit: string | null;
-  anzahl: number | null;
-  lademeter: number | null;
-  verkaufspreis: number | null;
-  status: string;
-  cmr_url: string | null;
-  cmr_file_name: string | null;
-  cmr_uploaded_at: string | null;
+  nummer: string;
+  name: string;
+  farbe: string;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface SendungInput {
-  referenz: string;
-  kunde_id?: string | null;
-  lade_plz?: string | null;
-  lade_ort: string;
-  lade_adresse?: string | null;
-  lade_land?: string | null;
-  entlade_plz?: string | null;
-  entlade_ort: string;
-  entlade_adresse?: string | null;
-  entlade_land?: string | null;
-  ladedatum: string;
-  ladezeit?: string | null;
-  entladedatum: string;
-  entladezeit?: string | null;
-  gewicht?: number | null;
-  packungseinheit?: string | null;
-  anzahl?: number | null;
-  lademeter?: number | null;
-  verkaufspreis?: number | null;
-  status?: string;
+export interface RelationInput {
+  nummer: string;
+  name: string;
+  farbe?: string | null;
 }
 
 /* ── Helper ────────────────────────────────────────────────────────── */
@@ -66,19 +28,19 @@ function useSupabase() {
   };
 }
 
-/* ── Fetch all sendungen ──────────────────────────────────────────── */
-export function useSendungen() {
+/* ── Fetch all relationen ─────────────────────────────────────────── */
+export function useRelationen() {
   const getSupabase = useSupabase();
 
-  return useQuery<SendungRow[]>({
-    queryKey: ["sendungen"],
+  return useQuery<Relation[]>({
+    queryKey: ["relationen"],
     queryFn: async () => {
       const supabase = await getSupabase();
       const { data, error } = await supabase
-        .from("sendungen")
-        .select("*, kunde:unternehmen!kunde_id(id, name, kundennummer, adresse, plz, ort, land)")
+        .from("relationen")
+        .select("*")
         .is("deleted_at", null)
-        .order("created_at", { ascending: false });
+        .order("nummer", { ascending: true });
 
       if (error) throw error;
       return data;
@@ -87,54 +49,54 @@ export function useSendungen() {
 }
 
 /* ── Create ────────────────────────────────────────────────────────── */
-export function useCreateSendung() {
+export function useCreateRelation() {
   const getSupabase = useSupabase();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: SendungInput) => {
+    mutationFn: async (input: RelationInput) => {
       const supabase = await getSupabase();
       const { data, error } = await supabase
-        .from("sendungen")
+        .from("relationen")
         .insert(input)
         .select()
         .single();
 
       if (error) throw error;
-      return data as SendungRow;
+      return data as Relation;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sendungen"] });
+      queryClient.invalidateQueries({ queryKey: ["relationen"] });
     },
   });
 }
 
 /* ── Update ────────────────────────────────────────────────────────── */
-export function useUpdateSendung() {
+export function useUpdateRelation() {
   const getSupabase = useSupabase();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, ...input }: Partial<SendungInput> & { id: string }) => {
+    mutationFn: async ({ id, ...input }: Partial<RelationInput> & { id: string }) => {
       const supabase = await getSupabase();
       const { data, error } = await supabase
-        .from("sendungen")
+        .from("relationen")
         .update(input)
         .eq("id", id)
-        .select("*, kunde:unternehmen!kunde_id(id, name, kundennummer, adresse, plz, ort, land)")
+        .select()
         .single();
 
       if (error) throw error;
-      return data as SendungRow;
+      return data as Relation;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sendungen"] });
+      queryClient.invalidateQueries({ queryKey: ["relationen"] });
     },
   });
 }
 
 /* ── Soft delete ───────────────────────────────────────────────────── */
-export function useDeleteSendung() {
+export function useDeleteRelation() {
   const getSupabase = useSupabase();
   const queryClient = useQueryClient();
 
@@ -142,14 +104,14 @@ export function useDeleteSendung() {
     mutationFn: async (id: string) => {
       const supabase = await getSupabase();
       const { error } = await supabase
-        .from("sendungen")
+        .from("relationen")
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", id);
 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sendungen"] });
+      queryClient.invalidateQueries({ queryKey: ["relationen"] });
     },
   });
 }

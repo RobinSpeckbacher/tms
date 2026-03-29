@@ -28,6 +28,7 @@ import {
   useDeleteTruck,
   useNextTruckRef,
 } from "@/hooks/useTrucks";
+import { useRelationen } from "@/hooks/useRelationen";
 import type { Unternehmen } from "@/hooks/useUnternehmen";
 
 const inputSx = {
@@ -135,6 +136,7 @@ function TruckFormInner({
           entladedatum: entlade || s.format("YYYY-MM-DD"),
           entladezeit: (truck.entladezeit as string)?.slice(0, 5) || "17:00",
           status: (truck.status as TruckStatus) || "verfügbar",
+          relationId: (truck.relation_id as string) || "",
           maxPaletten:
             truck.max_paletten != null ? String(truck.max_paletten) : "",
           maxGewicht:
@@ -162,6 +164,7 @@ function TruckFormInner({
         entladedatum: s.format("YYYY-MM-DD"),
         entladezeit: "17:00",
         status: "verfügbar" as TruckStatus,
+        relationId: "",
         maxPaletten: "",
         maxGewicht: "",
         lademeter: "",
@@ -184,6 +187,7 @@ function TruckFormInner({
       entladedatum: dayjs().format("YYYY-MM-DD"),
       entladezeit: "17:00",
       status: "verfügbar" as TruckStatus,
+      relationId: "",
       maxPaletten: "",
       maxGewicht: "",
       lademeter: "",
@@ -204,8 +208,12 @@ function TruckFormInner({
   const [bgColor, setBgColor] = useState(initial.bgColor);
 
   // ── Referenzen
-  const [interneRef] = useState(initial.ref);
+  const interneRef = isEdit ? initial.ref : nextRef || initial.ref;
   const [kundenRef, setKundenRef] = useState(initial.kundenRef);
+
+  // ── Relation
+  const [relationId, setRelationId] = useState(initial.relationId);
+  const { data: relationen = [] } = useRelationen();
 
   // ── Planung
   const [ladedatum, setLadedatum] = useState(initial.startDate);
@@ -238,7 +246,14 @@ function TruckFormInner({
   if (!open) return null;
 
   const handleSubmit = async () => {
-    if (!kennzeichen.trim()) return;
+    if (!kennzeichen.trim()) {
+      toast.error("Bitte Kennzeichen eingeben");
+      return;
+    }
+    if (!relationId) {
+      toast.error("Bitte eine Relation auswählen");
+      return;
+    }
 
     const input = {
       interne_ref: interneRef,
@@ -260,6 +275,7 @@ function TruckFormInner({
       preis_pro_km: preisProKm ? Number(preisProKm) : undefined,
       gesamtpreis: gesamtpreis ? Number(gesamtpreis) : undefined,
       kosten: kosten ? Number(kosten) : undefined,
+      relation_id: relationId,
     };
 
     if (isEdit) {
@@ -580,6 +596,36 @@ function TruckFormInner({
                 </Field>
               </Box>
             </Stack>
+
+            <Field label="Relation" required>
+              <Select
+                size="sm"
+                value={relationId}
+                onChange={(_e, val) => setRelationId(val || "")}
+                placeholder="Keine Relation"
+                sx={{
+                  "--Select-focusedHighlight": "#155dfc",
+                  color: "#0f172b",
+                }}
+              >
+                {relationen.map((r) => (
+                  <Option key={r.id} value={r.id}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          bgcolor: r.farbe || "#155dfc",
+                          flexShrink: 0,
+                        }}
+                      />
+                      {r.nummer} – {r.name}
+                    </Box>
+                  </Option>
+                ))}
+              </Select>
+            </Field>
 
             <Field label="Status">
               <Select

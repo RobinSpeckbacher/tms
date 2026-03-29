@@ -27,6 +27,7 @@ export interface Truck {
   kosten?: number;
   distanz_km?: number;
   fahrzeit_min?: number;
+  relation_id?: string | null;
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -52,6 +53,7 @@ export interface TruckInput {
   preis_pro_km?: number | null;
   gesamtpreis?: number | null;
   kosten?: number | null;
+  relation_id: string;
 }
 
 /* ── Helper ────────────────────────────────────────────────────────── */
@@ -69,6 +71,8 @@ export function useNextTruckRef() {
 
   return useQuery<string>({
     queryKey: ["trucks", "nextRef"],
+    staleTime: 0,
+    refetchOnMount: "always",
     queryFn: async () => {
       const supabase = await getSupabase();
       const { data, error } = await supabase
@@ -114,10 +118,21 @@ export function useCreateTruck() {
 
   return useMutation({
     mutationFn: async (input: TruckInput) => {
+      if (!input.relation_id) throw new Error("Relation ist erforderlich");
+
       const supabase = await getSupabase();
+
+      // Generate fresh interne_ref at insert time to avoid duplicates
+      const { data: refs } = await supabase.from("trucks").select("interne_ref");
+      let max = 10000;
+      for (const row of refs ?? []) {
+        const n = parseInt(row.interne_ref, 10);
+        if (!isNaN(n) && n > max) max = n;
+      }
+
       const { data, error } = await supabase
         .from("trucks")
-        .insert(input)
+        .insert({ ...input, interne_ref: String(max + 1) })
         .select()
         .single();
 

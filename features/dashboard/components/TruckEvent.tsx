@@ -4,12 +4,12 @@ import { useState, useMemo } from "react";
 import type { CalendarEvent } from "@ilamy/calendar";
 import type { SendungRow } from "@/hooks/useSendungen";
 import type { Truck } from "@/hooks/useTrucks";
-import { Package, Truck as TruckIcon, User } from "lucide-react";
+import { Package, Truck as TruckIcon, User, AlertTriangle } from "lucide-react";
 
 /* ── Helpers ──────────────────────────────────────────────────────── */
 function pct(used: number, max: number) {
   if (!max) return 0;
-  return Math.min(Math.round((used / max) * 100), 100);
+  return Math.round((used / max) * 100);
 }
 
 function barColor(percent: number) {
@@ -41,7 +41,9 @@ export default function TruckEvent({
   const accent = (event.backgroundColor as string) || "#155dfc";
 
   const capacity = useMemo(() => {
-    let usedLdm = 0, usedKg = 0, usedPal = 0;
+    let usedLdm = 0,
+      usedKg = 0,
+      usedPal = 0;
     for (const s of assignedSendungen) {
       usedLdm += s.lademeter ?? 0;
       usedKg += s.gewicht ?? 0;
@@ -50,7 +52,12 @@ export default function TruckEvent({
     const maxLdm = truck?.lademeter ?? 0;
     const maxKg = truck?.max_gewicht ?? 0;
     const maxPal = truck?.max_paletten ?? 0;
-    const mainPct = Math.max(pct(usedLdm, maxLdm), pct(usedKg, maxKg), pct(usedPal, maxPal)) || 0;
+    const mainPct =
+      Math.max(
+        pct(usedLdm, maxLdm),
+        pct(usedKg, maxKg),
+        pct(usedPal, maxPal),
+      ) || 0;
     return { mainPct };
   }, [assignedSendungen, truck]);
 
@@ -60,9 +67,10 @@ export default function TruckEvent({
     <div
       className={`group/truck relative h-full w-full flex overflow-hidden rounded-md cursor-pointer
         bg-white border transition-all
-        ${isDragOver
-          ? "border-blue-400 ring-2 ring-blue-400/30 scale-[1.01]"
-          : "border-slate-200 hover:border-slate-300 hover:shadow-md"
+        ${
+          isDragOver
+            ? "border-blue-400 ring-2 ring-blue-400/30 scale-[1.01]"
+            : "border-slate-200 hover:border-slate-300 hover:shadow-md"
         }`}
       onClick={(e) => {
         e.stopPropagation();
@@ -115,7 +123,7 @@ export default function TruckEvent({
                 <div
                   className="h-full rounded-full transition-all"
                   style={{
-                    width: `${capacity.mainPct}%`,
+                    width: `${Math.min(capacity.mainPct, 100)}%`,
                     backgroundColor: barColor(capacity.mainPct),
                   }}
                 />
@@ -128,12 +136,20 @@ export default function TruckEvent({
               </span>
             </div>
           )}
+          {capacity.mainPct >= 100 && (
+            <div className="flex items-center gap-0.5 text-[9px] text-red-600 font-medium">
+              <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+              <span>Überladen</span>
+            </div>
+          )}
         </div>
 
         {/* Drop zone overlay */}
         {isDragOver && (
-          <div className="absolute inset-0 flex items-center justify-center rounded-md
-                          bg-blue-50/80 border-2 border-dashed border-blue-400/50">
+          <div
+            className="absolute inset-0 flex items-center justify-center rounded-md
+                          bg-blue-50/80 border-2 border-dashed border-blue-400/50"
+          >
             <span className="text-[10px] font-semibold text-blue-600">
               ✚ Ablegen
             </span>

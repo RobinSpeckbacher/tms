@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   X,
   Package,
@@ -12,9 +12,13 @@ import {
   User,
   SquarePen,
   CalendarDays,
+  FileText,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import type { Truck } from "@/hooks/useTrucks";
 import type { SendungRow } from "@/hooks/useSendungen";
+import { generateCmrPdf } from "@/services/cmrService";
 
 /* ── Helpers ──────────────────────────────────────────────────────── */
 const PE_SHORT: Record<string, string> = {
@@ -27,7 +31,7 @@ const PE_SHORT: Record<string, string> = {
 
 function pct(used: number, max: number) {
   if (!max) return 0;
-  return Math.min(Math.round((used / max) * 100), 100);
+  return Math.round((used / max) * 100);
 }
 
 function barColor(p: number) {
@@ -43,6 +47,7 @@ interface TruckDetailPanelProps {
   open: boolean;
   onClose: () => void;
   onEditTruck: (truck: Truck) => void;
+  onEditSendung: (sendung: SendungRow) => void;
   onUnassignSendung: (sendungId: string) => void;
   onDropSendung: (truckId: string, sendungId: string) => void;
 }
@@ -54,13 +59,16 @@ export default function TruckDetailPanel({
   open,
   onClose,
   onEditTruck,
+  onEditSendung,
   onUnassignSendung,
   onDropSendung,
 }: TruckDetailPanelProps) {
   const accent = truck?.farbe || "#155dfc";
 
   const capacity = useMemo(() => {
-    let usedLdm = 0, usedKg = 0, usedPal = 0;
+    let usedLdm = 0,
+      usedKg = 0,
+      usedPal = 0;
     for (const s of sendungen) {
       usedLdm += s.lademeter ?? 0;
       usedKg += s.gewicht ?? 0;
@@ -77,6 +85,63 @@ export default function TruckDetailPanel({
   }, [sendungen, truck]);
 
   if (!open || !truck) return null;
+
+  return (
+    <TruckDetailPanelInner
+      truck={truck}
+      sendungen={sendungen}
+      accent={accent}
+      capacity={capacity}
+      onClose={onClose}
+      onEditTruck={onEditTruck}
+      onEditSendung={onEditSendung}
+      onUnassignSendung={onUnassignSendung}
+      onDropSendung={onDropSendung}
+    />
+  );
+}
+
+function TruckDetailPanelInner({
+  truck,
+  sendungen,
+  accent,
+  capacity,
+  onClose,
+  onEditTruck,
+  onEditSendung,
+  onUnassignSendung,
+  onDropSendung,
+}: {
+  truck: Truck;
+  sendungen: SendungRow[];
+  accent: string;
+  capacity: {
+    usedLdm: number;
+    usedKg: number;
+    usedPal: number;
+    maxLdm: number;
+    maxKg: number;
+    maxPal: number;
+    mainPct: number;
+  };
+  onClose: () => void;
+  onEditTruck: (truck: Truck) => void;
+  onEditSendung: (sendung: SendungRow) => void;
+  onUnassignSendung: (sendungId: string) => void;
+  onDropSendung: (truckId: string, sendungId: string) => void;
+}) {
+  const [cmrLoading, setCmrLoading] = useState(false);
+
+  const handleGenerateCmr = async () => {
+    setCmrLoading(true);
+    try {
+      await generateCmrPdf(truck, sendungen);
+    } catch {
+      // silently fail — user will see no PDF opened
+    } finally {
+      setCmrLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
@@ -129,6 +194,18 @@ export default function TruckDetailPanel({
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <button
+                onClick={handleGenerateCmr}
+                disabled={cmrLoading}
+                className="p-1.5 rounded-md text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                title="CMR Frachtbrief generieren"
+              >
+                {cmrLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4" />
+                )}
+              </button>
+              <button
                 onClick={() => onEditTruck(truck)}
                 className="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                 title="LKW bearbeiten"
@@ -164,7 +241,10 @@ export default function TruckDetailPanel({
             <div className="mt-3">
               <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
                 <span>Auslastung</span>
-                <span className="font-semibold" style={{ color: barColor(capacity.mainPct) }}>
+                <span
+                  className="font-semibold"
+                  style={{ color: barColor(capacity.mainPct) }}
+                >
                   {capacity.mainPct}%
                 </span>
               </div>
@@ -172,16 +252,31 @@ export default function TruckDetailPanel({
                 <div
                   className="h-full rounded-full transition-all duration-300"
                   style={{
-                    width: `${capacity.mainPct}%`,
+                    width: `${Math.min(capacity.mainPct, 100)}%`,
                     backgroundColor: barColor(capacity.mainPct),
                   }}
                 />
               </div>
               <div className="flex items-center gap-3 mt-1.5 text-[10px] text-slate-400">
-                <span>{capacity.usedKg}/{capacity.maxKg} kg</span>
-                <span>{capacity.usedPal}/{capacity.maxPal} Pal</span>
-                <span>{capacity.usedLdm}/{capacity.maxLdm} ldm</span>
+                <span>
+                  {capacity.usedKg}/{capacity.maxKg} kg
+                </span>
+                <span>
+                  {capacity.usedPal}/{capacity.maxPal} Pal
+                </span>
+                <span>
+                  {capacity.usedLdm}/{capacity.maxLdm} ldm
+                </span>
               </div>
+              {capacity.mainPct >= 100 && (
+                <div className="mt-2 flex items-center gap-1.5 rounded-md bg-red-50 border border-red-200 px-2.5 py-1.5 text-xs text-red-600">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-medium">
+                    Achtung: LKW ist möglicherweise überladen (
+                    {capacity.mainPct}%)
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -222,8 +317,16 @@ export default function TruckDetailPanel({
                           {s.referenz}
                         </span>
                         <button
-                          onClick={() => onUnassignSendung(s.id)}
+                          onClick={() => onEditSendung(s)}
                           className="ml-auto p-1 rounded text-slate-300 opacity-0 group-hover:opacity-100
+                                     hover:bg-blue-50 hover:text-blue-600 transition-all"
+                          title="Sendung bearbeiten"
+                        >
+                          <SquarePen className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onUnassignSendung(s.id)}
+                          className="p-1 rounded text-slate-300 opacity-0 group-hover:opacity-100
                                      hover:bg-red-50 hover:text-red-500 transition-all"
                           title="Zuweisung entfernen"
                         >

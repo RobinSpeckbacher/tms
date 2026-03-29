@@ -1,8 +1,18 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { Bell, Menu } from "lucide-react";
+
+const subscribe = () => () => {};
+function useHydrated() {
+  return useSyncExternalStore(
+    subscribe,
+    () => true,
+    () => false,
+  );
+}
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -23,6 +33,7 @@ interface AppHeaderProps {
 export function AppHeader({ onMenuToggle }: AppHeaderProps) {
   const pathname = usePathname();
   const title = getPageTitle(pathname);
+  const hydrated = useHydrated();
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-10">
@@ -48,13 +59,17 @@ export function AppHeader({ onMenuToggle }: AppHeaderProps) {
           <Bell className="w-5 h-5" />
         </button>
         <div className="h-6 w-px bg-slate-200" />
-        <UserButton
-          appearance={{
-            elements: {
-              avatarBox: "w-8 h-8",
-            },
-          }}
-        />
+        {hydrated ? (
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: "w-8 h-8",
+              },
+            }}
+          />
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-slate-200 animate-pulse" />
+        )}
       </div>
     </header>
   );
