@@ -112,3 +112,66 @@ export function formatDuration(seconds: number): string {
   if (h === 0) return `${m} min`;
   return `${h}h ${m}m`;
 }
+
+/* ── Multi-waypoint route ──────────────────────────────────────────── */
+
+export interface OsrmLeg {
+  /** Distance in metres */
+  distance: number;
+  /** Duration in seconds */
+  duration: number;
+}
+
+export interface OsrmMultiRouteResult {
+  /** Per-leg distance & duration (N-1 legs for N waypoints) */
+  legs: OsrmLeg[];
+  /** Total distance in metres */
+  distance: number;
+  /** Total duration in seconds */
+  duration: number;
+}
+
+/**
+ * Multi-waypoint route — calculates a driving route through all waypoints
+ * in a single OSRM request. Much more reliable than separate A→B calls.
+ *
+ * Waypoints are in [lon, lat] order (OsrmCoord).
+ * Returns per-leg distances + total, or null on failure.
+ */
+export async function fetchMultiWaypointRoute(
+  waypoints: OsrmCoord[],
+): Promise<OsrmMultiRouteResult | null> {
+  if (waypoints.length < 2) return null;
+
+  const coords = waypoints.map((w) => `${w.lon},${w.lat}`).join(';');
+
+  try {
+    const res = await fetch(
+      `${OSRM_BASE}/route/v1/driving/${coords}?overview=false&steps=false`,
+    );
+    if (!res.ok) return null;
+
+    const data: {
+      code: string;
+      routes?: {
+        distance: number;
+        duration: number;
+        legs: { distance: number; duration: number }[];
+      }[];
+    } = await res.json();
+
+    if (data.code !== 'Ok' || !data.routes?.length) return null;
+
+    const route = data.routes[0];
+    return {
+      legs: route.legs.map((l) => ({
+        distance: l.distance,
+        duration: l.duration,
+      })),
+      distance: route.distance,
+      duration: route.duration,
+    };
+  } catch {
+    return null;
+  }
+}

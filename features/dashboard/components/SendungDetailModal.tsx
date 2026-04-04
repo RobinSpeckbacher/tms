@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import {
   MapPin,
@@ -11,14 +12,18 @@ import {
   Upload,
   Trash2,
   ExternalLink,
+  Eye,
+  EyeOff,
   Building2,
   Truck,
   Euro,
 } from "lucide-react";
 import SlideOver from "@/components/common/SlideOver";
+import Image from "next/image";
 import type { EnrichedSendung } from "./ShipmentsTable";
 import { useUploadCmr, useDeleteCmr, useGetCmrUrl } from "@/hooks/useCmr";
 import { useUpdateSendung } from "@/hooks/useSendungen";
+import { useDistance } from "@/hooks/useDistance";
 import { toast } from "react-toastify";
 import Button from "@mui/joy/Button";
 import Select from "@mui/joy/Select";
@@ -128,10 +133,38 @@ export default function SendungDetailModal({
   onEdit,
 }: SendungDetailModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const uploadCmr = useUploadCmr();
   const deleteCmr = useDeleteCmr();
   const getCmrUrl = useGetCmrUrl();
   const updateSendung = useUpdateSendung();
+
+  // Distance between Ladeort ↔ Entladeort
+  const { distance, isLoading: distanceLoading } = useDistance(
+    sendung?.lade_plz && sendung.lade_ort
+      ? {
+          plz: sendung.lade_plz,
+          ort: sendung.lade_ort,
+          land: sendung.lade_land ?? "AT",
+        }
+      : null,
+    sendung?.entlade_plz && sendung.entlade_ort
+      ? {
+          plz: sendung.entlade_plz,
+          ort: sendung.entlade_ort,
+          land: sendung.entlade_land ?? "AT",
+        }
+      : null,
+  );
+
+  // CMR preview via react-query
+  const { data: previewUrl, isLoading: previewLoading } = useQuery({
+    queryKey: ["cmr-preview", sendung?.id, sendung?.cmr_path],
+    queryFn: () => getCmrUrl(sendung!.cmr_path!),
+    enabled: !!sendung?.cmr_path,
+  });
+
+  const isPdf = sendung?.cmr_file_name?.toLowerCase().endsWith(".pdf");
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -186,7 +219,7 @@ export default function SendungDetailModal({
 
   if (!sendung) return null;
 
-  const hasCmr = !!sendung.cmr_url;
+  const hasCmr = !!sendung.cmr_path;
   const marge =
     sendung.verkaufspreis != null && sendung.einkaufspreis != null
       ? sendung.verkaufspreis - sendung.einkaufspreis
@@ -280,6 +313,20 @@ export default function SendungDetailModal({
             <div className="flex items-center gap-1">
               <button
                 type="button"
+                onClick={() => setShowPreview((v) => !v)}
+                className="rounded p-1.5 text-[#57688e] hover:bg-[#155dfc]/10 hover:text-[#155dfc] transition-colors"
+                title={
+                  showPreview ? "Vorschau ausblenden" : "Vorschau anzeigen"
+                }
+              >
+                {showPreview ? (
+                  <EyeOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Eye className="h-3.5 w-3.5" />
+                )}
+              </button>
+              <button
+                type="button"
                 onClick={handleOpenCmr}
                 className="rounded p-1.5 text-[#57688e] hover:bg-[#155dfc]/10 hover:text-[#155dfc] transition-colors"
                 title="Öffnen"
@@ -358,6 +405,41 @@ export default function SendungDetailModal({
             </Button>
           </div>
         )}
+
+        {/* CMR Preview */}
+        {hasCmr && showPreview && (
+          <div className="mt-3 pt-3 border-t border-[#0f172b]/5">
+            {previewLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <CircularProgress size="sm" />
+              </div>
+            ) : previewUrl ? (
+              <div className="rounded-md overflow-hidden border border-[#0f172b]/10 bg-white">
+                {isPdf ? (
+                  <iframe
+                    src={`${previewUrl}#toolbar=0&navpanes=0`}
+                    title="CMR Vorschau"
+                    className="w-full border-0"
+                    style={{ height: 400 }}
+                  />
+                ) : (
+                  <Image
+                    src={previewUrl}
+                    alt="CMR Vorschau"
+                    width={440}
+                    height={400}
+                    className="w-full h-auto max-h-100 object-contain"
+                    unoptimized
+                  />
+                )}
+              </div>
+            ) : (
+              <p className="text-[0.65rem] text-[#57688e] text-center py-4">
+                Vorschau nicht verfügbar
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Status Management ────────────────────────────────────── */}
@@ -429,6 +511,23 @@ export default function SendungDetailModal({
           )}
         </div>
       </div>
+
+      {/* Distance indicator */}
+      {(distance || distanceLoading) && (
+        <div className="mt-2 flex items-center gap-2 rounded-md bg-[#f1f5f9] px-3 py-1.5">
+          <Truck className="h-3.5 w-3.5 text-[#155dfc] shrink-0" />
+          {distanceLoading ? (
+            <span className="text-[0.7rem] text-[#57688e]">
+              Entfernung wird berechnet…
+            </span>
+          ) : distance ? (
+            <span className="text-[0.7rem] text-[#0f172b] font-medium">
+              {distance.distanceFormatted} &middot; {distance.durationFormatted}{" "}
+              Fahrzeit
+            </span>
+          ) : null}
+        </div>
+      )}
 
       {/* ── Zeitfenster ──────────────────────────────────────────── */}
       <Section title="Zeitfenster" />

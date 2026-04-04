@@ -26,7 +26,7 @@ export interface SendungRow {
   lademeter: number | null;
   verkaufspreis: number | null;
   status: string;
-  cmr_url: string | null;
+  cmr_path: string | null;
   cmr_file_name: string | null;
   cmr_uploaded_at: string | null;
   deleted_at: string | null;

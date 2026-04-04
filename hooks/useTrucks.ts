@@ -65,7 +65,7 @@ function useSupabase() {
   };
 }
 
-/* ── Next unique 5-digit reference ─────────────────────────────────── */
+/* ── Next unique reference (preview only — actual ref assigned server-side) ── */
 export function useNextTruckRef() {
   const getSupabase = useSupabase();
 
@@ -75,18 +75,9 @@ export function useNextTruckRef() {
     refetchOnMount: "always",
     queryFn: async () => {
       const supabase = await getSupabase();
-      const { data, error } = await supabase
-        .from("trucks")
-        .select("interne_ref");
-
+      const { data, error } = await supabase.rpc("next_truck_interne_ref");
       if (error) throw error;
-
-      let max = 10000;
-      for (const row of data ?? []) {
-        const n = parseInt(row.interne_ref, 10);
-        if (!isNaN(n) && n > max) max = n;
-      }
-      return String(max + 1);
+      return data as string;
     },
   });
 }
@@ -122,17 +113,13 @@ export function useCreateTruck() {
 
       const supabase = await getSupabase();
 
-      // Generate fresh interne_ref at insert time to avoid duplicates
-      const { data: refs } = await supabase.from("trucks").select("interne_ref");
-      let max = 10000;
-      for (const row of refs ?? []) {
-        const n = parseInt(row.interne_ref, 10);
-        if (!isNaN(n) && n > max) max = n;
-      }
+      // Get next ref from server-side sequence (race-condition safe)
+      const { data: nextRef, error: refError } = await supabase.rpc("next_truck_interne_ref");
+      if (refError) throw refError;
 
       const { data, error } = await supabase
         .from("trucks")
-        .insert({ ...input, interne_ref: String(max + 1) })
+        .insert({ ...input, interne_ref: nextRef as string })
         .select()
         .single();
 

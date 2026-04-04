@@ -3,6 +3,8 @@ import { useAuth } from "@clerk/nextjs";
 import { createClient, createAuthClient } from "@/lib/supabase/client";
 
 const BUCKET = "cmr-documents";
+const ALLOWED_MIME_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/tiff"];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 function useSupabase() {
   const { getToken } = useAuth();
@@ -25,28 +27,30 @@ export function useUploadCmr() {
       sendungId: string;
       file: File;
     }) => {
+      if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+        throw new Error("Nur PDF, JPEG, PNG oder TIFF erlaubt");
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error("Datei zu groß (max 10 MB)");
+      }
+
       const supabase = await getSupabase();
 
-      const ext = file.name.split(".").pop() ?? "pdf";
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "pdf";
       const path = `${sendungId}/cmr.${ext}`;
 
       // Upload file (upsert to allow re-upload)
       const { error: uploadError } = await supabase.storage
         .from(BUCKET)
-        .upload(path, file, { upsert: true });
+        .upload(path, file, { upsert: true, contentType: file.type });
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from(BUCKET).getPublicUrl(path);
-
-      // Update sendung record
+      // Store path (not public URL) — signed URLs generated on demand
       const { error: updateError } = await supabase
         .from("sendungen")
         .update({
-          cmr_url: publicUrl,
+          cmr_path: path,
           cmr_file_name: file.name,
           cmr_uploaded_at: new Date().toISOString(),
         })
@@ -54,7 +58,7 @@ export function useUploadCmr() {
 
       if (updateError) throw updateError;
 
-      return { url: publicUrl, fileName: file.name };
+      return { path, fileName: file.name };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sendungen"] });
@@ -85,7 +89,7 @@ export function useDeleteCmr() {
       const { error } = await supabase
         .from("sendungen")
         .update({
-          cmr_url: null,
+          cmr_path: null,
           cmr_file_name: null,
           cmr_uploaded_at: null,
         })
@@ -99,22 +103,16 @@ export function useDeleteCmr() {
   });
 }
 
-/* ── Download signed URL (for private buckets) ────────────────────── */
+/* ── Get signed URL for a stored CMR path ─────────────────────────── */
 export function useGetCmrUrl() {
   const getSupabase = useSupabase();
 
-  return async (sendungId: string): Promise<string | null> => {
+  return async (cmrPath: string): Promise<string | null> => {
     const supabase = await getSupabase();
-
-    const { data: files } = await supabase.storage
-      .from(BUCKET)
-      .list(sendungId);
-
-    if (!files || files.length === 0) return null;
 
     const { data } = await supabase.storage
       .from(BUCKET)
-      .createSignedUrl(`${sendungId}/${files[0].name}`, 3600);
+      .createSignedUrl(cmrPath, 3600);
 
     return data?.signedUrl ?? null;
   };

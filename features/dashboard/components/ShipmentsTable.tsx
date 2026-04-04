@@ -124,9 +124,9 @@ export default function ShipmentsTable({
       {
         id: "cmr",
         header: "CMR",
-        accessorFn: (row) => (row.cmr_url ? "ja" : "nein"),
+        accessorFn: (row) => (row.cmr_path ? "ja" : "nein"),
         cell: ({ row: { original } }) =>
-          original.cmr_url ? (
+          original.cmr_path ? (
             <span
               className="inline-flex items-center gap-1 text-emerald-600"
               title={`CMR: ${original.cmr_file_name ?? "vorhanden"}`}

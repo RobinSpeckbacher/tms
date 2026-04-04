@@ -3,22 +3,36 @@ import { NextResponse } from "next/server";
 import { Webhook } from "svix";
 import { createAdminClient } from "@/lib/supabase/server";
 
+type ClerkEmailAddress = { email_address: string; id: string };
+
 type ClerkUserEvent = {
   type: string;
   data: {
     id: string;
-    email_addresses: { email_address: string; id: string }[];
+    email_addresses: ClerkEmailAddress[];
+    primary_email_address_id: string | null;
     first_name: string | null;
     last_name: string | null;
     image_url: string | null;
   };
 };
 
+function getPrimaryEmail(
+  emailAddresses: ClerkEmailAddress[],
+  primaryEmailId: string | null
+): string | null {
+  if (primaryEmailId) {
+    const primary = emailAddresses.find((e) => e.id === primaryEmailId);
+    if (primary) return primary.email_address;
+  }
+  return emailAddresses[0]?.email_address ?? null;
+}
+
 export async function POST(req: Request) {
   const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
   if (!webhookSecret) {
     return NextResponse.json(
-      { error: "CLERK_WEBHOOK_SECRET is not set" },
+      { error: "Webhook not configured" },
       { status: 500 }
     );
   }
@@ -56,13 +70,13 @@ export async function POST(req: Request) {
   const supabase = createAdminClient();
 
   if (event.type === "user.created") {
-    const { id, email_addresses, first_name, last_name, image_url } =
+    const { id, email_addresses, primary_email_address_id, first_name, last_name, image_url } =
       event.data;
-    const primaryEmail = email_addresses[0]?.email_address ?? null;
+    const email = getPrimaryEmail(email_addresses, primary_email_address_id);
 
     const { error } = await supabase.from("users").insert({
       id,
-      email: primaryEmail,
+      email,
       first_name,
       last_name,
       avatar_url: image_url,
@@ -70,7 +84,7 @@ export async function POST(req: Request) {
 
     if (error) {
       console.error("Failed to insert user:", JSON.stringify(error));
-      return NextResponse.json({ error }, { status: 500 });
+      return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
     }
   }
 
@@ -80,7 +94,7 @@ export async function POST(req: Request) {
 
     if (error) {
       console.error("Failed to delete user:", JSON.stringify(error));
-      return NextResponse.json({ error }, { status: 500 });
+      return NextResponse.json({ error: "Failed to delete user" }, { status: 500 });
     }
   }
 

@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import dayjs from "dayjs";
 import type { CalendarEvent } from "@ilamy/calendar";
-import { Trash2, Truck, CalendarDays, Euro, Route } from "lucide-react";
+import { Trash2, Truck, CalendarDays, Euro } from "lucide-react";
 
 import Button from "@mui/joy/Button";
 import Input from "@mui/joy/Input";
@@ -232,10 +232,6 @@ function TruckFormInner({
   const [gesamtpreis, setGesamtpreis] = useState(initial.gesamtpreis);
   const [kosten, setKosten] = useState(initial.kosten);
 
-  // ── Route (auto)
-  const [distanz] = useState("–");
-  const [fahrzeit] = useState("–");
-
   // ── Gewinn (computed)
   const gewinn = useMemo(() => {
     const g = Number(gesamtpreis) - Number(kosten);
@@ -446,9 +442,6 @@ function TruckFormInner({
           </Tab>
           <Tab variant="plain" sx={{ fontSize: "0.75rem", gap: 0.5 }}>
             <Euro className="h-3 w-3" /> Kosten
-          </Tab>
-          <Tab variant="plain" sx={{ fontSize: "0.75rem", gap: 0.5 }}>
-            <Route className="h-3 w-3" /> Route
           </Tab>
         </TabList>
 
@@ -774,48 +767,6 @@ function TruckFormInner({
                 }}
               >
                 {gewinn}
-              </Box>
-            </Field>
-          </Stack>
-        </TabPanel>
-
-        {/* ── TAB: Route ────────────────────────────────────────────── */}
-        <TabPanel value={3} sx={{ p: 0 }}>
-          <Stack spacing={2}>
-            <Typography level="body-xs" sx={{ color: "#57688e" }}>
-              Route wird automatisch berechnet sobald Lade- und Entladeort
-              hinterlegt sind.
-            </Typography>
-
-            <Field label="Distanz">
-              <Box
-                sx={{
-                  px: 1.5,
-                  py: 0.75,
-                  borderRadius: "sm",
-                  bgcolor: "#f8f9fb",
-                  border: "1px solid #d5dbe8",
-                  fontSize: "0.875rem",
-                  color: "#0f172b",
-                }}
-              >
-                {distanz}
-              </Box>
-            </Field>
-
-            <Field label="Geschätzte Fahrzeit">
-              <Box
-                sx={{
-                  px: 1.5,
-                  py: 0.75,
-                  borderRadius: "sm",
-                  bgcolor: "#f8f9fb",
-                  border: "1px solid #d5dbe8",
-                  fontSize: "0.875rem",
-                  color: "#0f172b",
-                }}
-              >
-                {fahrzeit}
               </Box>
             </Field>
           </Stack>

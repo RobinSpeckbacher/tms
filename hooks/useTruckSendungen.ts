@@ -39,7 +39,7 @@ export function useTruckSendungen() {
   });
 }
 
-/* ── Assign sendung to truck ──────────────────────────────────────── */
+/* ── Assign sendung to truck (atomic via RPC) ─────────────────────── */
 export function useAssignSendung() {
   const getSupabase = useSupabase();
   const queryClient = useQueryClient();
@@ -47,21 +47,11 @@ export function useAssignSendung() {
   return useMutation({
     mutationFn: async ({ truckId, sendungId }: { truckId: string; sendungId: string }) => {
       const supabase = await getSupabase();
-
-      // Insert assignment
-      const { error: assignError } = await supabase
-        .from("truck_sendungen")
-        .insert({ truck_id: truckId, sendung_id: sendungId });
-
-      if (assignError) throw assignError;
-
-      // Update sendung status
-      const { error: statusError } = await supabase
-        .from("sendungen")
-        .update({ status: "zugewiesen" })
-        .eq("id", sendungId);
-
-      if (statusError) throw statusError;
+      const { error } = await supabase.rpc("assign_sendung_to_truck", {
+        p_truck_id: truckId,
+        p_sendung_id: sendungId,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["truck_sendungen"] });
@@ -70,7 +60,7 @@ export function useAssignSendung() {
   });
 }
 
-/* ── Unassign sendung from truck ──────────────────────────────────── */
+/* ── Unassign sendung from truck (atomic via RPC) ─────────────────── */
 export function useUnassignSendung() {
   const getSupabase = useSupabase();
   const queryClient = useQueryClient();
@@ -78,20 +68,10 @@ export function useUnassignSendung() {
   return useMutation({
     mutationFn: async (sendungId: string) => {
       const supabase = await getSupabase();
-
-      const { error: deleteError } = await supabase
-        .from("truck_sendungen")
-        .delete()
-        .eq("sendung_id", sendungId);
-
-      if (deleteError) throw deleteError;
-
-      const { error: statusError } = await supabase
-        .from("sendungen")
-        .update({ status: "offen" })
-        .eq("id", sendungId);
-
-      if (statusError) throw statusError;
+      const { error } = await supabase.rpc("unassign_sendung_from_truck", {
+        p_sendung_id: sendungId,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["truck_sendungen"] });

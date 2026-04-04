@@ -947,12 +947,14 @@ export default function Versandnetz({
                     hover:bg-blue-50/30`}
                       >
                         {/* Relation label */}
-                        <td className="border-r border-b border-slate-200/70 p-0 align-top">
+                        <td
+                          className="border-r border-b border-slate-200/70 p-0 align-top"
+                          style={{
+                            borderLeftWidth: 4,
+                            borderLeftColor: accent,
+                          }}
+                        >
                           <div className="flex h-full">
-                            <div
-                              className="w-1 shrink-0"
-                              style={{ backgroundColor: accent }}
-                            />
                             <div className="flex-1 p-2.5 min-w-0">
                               <div className="flex items-center gap-1.5">
                                 <Route
