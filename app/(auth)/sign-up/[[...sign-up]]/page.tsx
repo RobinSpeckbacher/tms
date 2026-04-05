@@ -32,7 +32,10 @@ export default function SignUpPage() {
 
     // Step 1: create sign-up with email
     const { error: e1 } = await signUp.create({ emailAddress: email });
-    if (e1) { setError(e1.longMessage ?? e1.message); return; }
+    if (e1) {
+      setError(e1.longMessage ?? e1.message);
+      return;
+    }
 
     // Step 2: set password + name fields
     const { error: e2 } = await signUp.password({
@@ -42,11 +45,17 @@ export default function SignUpPage() {
       lastName: lastName || "",
       unsafeMetadata: { company },
     });
-    if (e2) { setError(e2.longMessage ?? e2.message); return; }
+    if (e2) {
+      setError(e2.longMessage ?? e2.message);
+      return;
+    }
 
     // Step 3: send email verification code
     const { error: e3 } = await signUp.verifications.sendEmailCode();
-    if (e3) { setError(e3.longMessage ?? e3.message); return; }
+    if (e3) {
+      setError(e3.longMessage ?? e3.message);
+      return;
+    }
 
     setStage("verify");
   }
@@ -57,12 +66,15 @@ export default function SignUpPage() {
 
     // Step 4: verify email code
     const { error: e1 } = await signUp.verifications.verifyEmailCode({ code });
-    if (e1) { setError(e1.longMessage ?? e1.message); return; }
+    if (e1) {
+      setError(e1.longMessage ?? e1.message);
+      return;
+    }
 
     // Step 5: finalize (activates session)
     const { error: e2 } = await signUp.finalize({
       navigate: ({ session, decorateUrl }) => {
-        if (session?.currentTask) return;
+        if (session.currentTask) return;
         const url = decorateUrl("/dashboard");
         if (url.startsWith("http")) {
           window.location.href = url;
@@ -71,7 +83,9 @@ export default function SignUpPage() {
         }
       },
     });
-    if (e2) { setError(e2.longMessage ?? e2.message); }
+    if (e2) {
+      setError(e2.longMessage ?? e2.message);
+    }
   }
 
   /* ── Verification stage ───────────────────────────────────────── */
@@ -79,14 +93,21 @@ export default function SignUpPage() {
     return (
       <div className="w-full max-w-sm">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-[#0f172b]">Check your email</h1>
+          <h1 className="text-2xl font-bold text-[#0f172b]">
+            Check your email
+          </h1>
           <p className="text-sm text-[#57688e] mt-1">
             We sent a verification code to{" "}
             <span className="font-medium text-[#0f172b]">{email}</span>.
           </p>
         </div>
 
-        <form onSubmit={handleVerify} className="space-y-5">
+        <form
+          onSubmit={(e) => {
+            void handleVerify(e);
+          }}
+          className="space-y-5"
+        >
           <div>
             <label className="block text-[10px] font-semibold text-[#57688e] uppercase tracking-widest mb-1.5">
               Verification Code
@@ -140,7 +161,12 @@ export default function SignUpPage() {
         </p>
       </div>
 
-      <form onSubmit={handleRegister} className="space-y-4">
+      <form
+        onSubmit={(e) => {
+          void handleRegister(e);
+        }}
+        className="space-y-4"
+      >
         {/* Full Name */}
         <div>
           <label className="block text-[10px] font-semibold text-[#57688e] uppercase tracking-widest mb-1.5">
@@ -215,17 +241,27 @@ export default function SignUpPage() {
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-[#d5dbe8] hover:text-[#57688e] transition"
             >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {showPassword ? (
+                <EyeOff className="w-4 h-4" />
+              ) : (
+                <Eye className="w-4 h-4" />
+              )}
             </button>
           </div>
         </div>
 
         {/* Terms */}
         <p className="text-xs text-[#57688e] leading-relaxed">
-          By clicking create account, you acknowledge that you have read and agree to our{" "}
-          <Link href="#" className="text-[#155dfc] hover:underline">Terms of Service</Link>{" "}
+          By clicking create account, you acknowledge that you have read and
+          agree to our{" "}
+          <Link href="#" className="text-[#155dfc] hover:underline">
+            Terms of Service
+          </Link>{" "}
           and{" "}
-          <Link href="#" className="text-[#155dfc] hover:underline">Security Protocols</Link>.
+          <Link href="#" className="text-[#155dfc] hover:underline">
+            Security Protocols
+          </Link>
+          .
         </p>
 
         {/* Error */}
@@ -247,7 +283,10 @@ export default function SignUpPage() {
 
       <p className="text-center text-sm text-[#57688e] mt-6">
         Already have an account?{" "}
-        <Link href="/sign-in" className="text-[#155dfc] font-medium hover:underline">
+        <Link
+          href="/sign-in"
+          className="text-[#155dfc] font-medium hover:underline"
+        >
           Log in
         </Link>
       </p>

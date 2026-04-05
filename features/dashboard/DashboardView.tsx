@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Image from "next/image";
 import dayjs from "dayjs";
 import { motion, AnimatePresence } from "motion/react";
@@ -11,34 +11,56 @@ import ShipmentForm from "./components/ShipmentForm";
 import SendungDetailModal from "./components/SendungDetailModal";
 import TruckDetailPanel from "./components/TruckDetailPanel";
 import TruckForm from "./components/TruckForm";
+import VorlagenSlideOver from "./components/VorlagenSlideOver";
 import type { CalendarEvent } from "@ilamy/calendar";
 import {
   Package,
   Plus,
+  RepeatIcon,
   MoreVertical,
+  CircleX,
+  TriangleAlert,
+  Check,
   MapPin,
   ArrowRight,
   CalendarDays,
   LayoutGrid,
   List,
+  ChevronDown,
 } from "lucide-react";
 import Button from "@mui/joy/Button";
+import Input from "@mui/joy/Input";
 import Tooltip from "@mui/joy/Tooltip";
+import IconButton from "@mui/joy/IconButton";
 import { useDialog } from "@/hooks/useDialog";
 import { useTrucks } from "@/hooks/useTrucks";
-import { useSendungen, type SendungRow } from "@/hooks/useSendungen";
+import {
+  useSendungen,
+  useCancelSendung,
+  useBulkCancelSendungen,
+  type SendungRow,
+} from "@/hooks/useSendungen";
 import {
   useTruckSendungen,
   useAssignSendung,
   useUnassignSendung,
 } from "@/hooks/useTruckSendungen";
 import { useRelationen, useCreateRelation } from "@/hooks/useRelationen";
+import {
+  useVorlagen,
+  useGenerateRecurringSendungen,
+} from "@/hooks/useVorlagen";
+import {
+  useTruckVorlagen,
+  useGenerateRecurringTrucksWithShipments,
+} from "@/hooks/useTruckVorlagen";
 import { useUser } from "@clerk/nextjs";
 import { toast } from "react-toastify";
 
 function formatDateTime(date: string, time?: string | null) {
   const dateLabel = dayjs(date).format("DD.MM.YYYY");
-  const timeLabel = time ? ` ${time.slice(0, 5)}` : "";
+  const timeLabel =
+    time != null && time.trim() !== "" ? ` ${time.slice(0, 5)}` : "";
   return `${dateLabel}${timeLabel}`;
 }
 
@@ -56,7 +78,8 @@ function initials(name: string) {
     .map((p) => p.trim())
     .filter(Boolean)
     .slice(0, 2);
-  return parts.map((p) => p[0]?.toUpperCase() ?? "").join("") || "U";
+  const value = parts.map((p) => p.charAt(0).toUpperCase()).join("");
+  return value !== "" ? value : "U";
 }
 
 /* ── ISO calendar week (no dayjs plugin needed) ──────────────────── */
@@ -75,11 +98,19 @@ function getISOWeek(dateStr: string): number {
 function ShipmentCard({
   sendung,
   onEdit,
+  onCancel,
+  onToggleSelect,
+  isSelected,
+  isCancelPending,
   fallbackCreatorName,
   fallbackCreatorAvatarUrl,
 }: {
   sendung: SendungRow;
   onEdit: () => void;
+  onCancel: () => void;
+  onToggleSelect: (checked: boolean) => void;
+  isSelected: boolean;
+  isCancelPending?: boolean;
   fallbackCreatorName?: string | null;
   fallbackCreatorAvatarUrl?: string | null;
 }) {
@@ -112,6 +143,16 @@ function ShipmentCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={(e) => onToggleSelect(e.target.checked)}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                draggable={false}
+                className="h-3.5 w-3.5 rounded border-[#94a3b8] text-[#155dfc] focus:ring-[#155dfc]"
+                aria-label={`Sendung ${sendung.referenz} auswählen`}
+              />
               <span className="inline-flex text-[10px] font-semibold uppercase tracking-wide text-[#155dfc] bg-[#155dfc]/8 px-1.5 py-0.5 rounded">
                 {sendung.status}
               </span>
@@ -120,21 +161,38 @@ function ShipmentCard({
               </span>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit();
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-            draggable={false}
-            aria-label="Sendung bearbeiten"
-            className="shrink-0 rounded-md p-1 text-[#57688e] opacity-100
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCancel();
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              draggable={false}
+              disabled={isCancelPending}
+              aria-label="Sendung stornieren"
+              className="shrink-0 rounded-md p-1 text-red-600 opacity-100 hover:bg-red-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Stornieren"
+            >
+              <CircleX className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              draggable={false}
+              aria-label="Sendung bearbeiten"
+              className="shrink-0 rounded-md p-1 text-[#57688e] opacity-100
                        hover:bg-[#155dfc]/10 hover:text-[#155dfc] transition-all"
-            title="Bearbeiten"
-          >
-            <MoreVertical className="h-3.5 w-3.5" />
-          </button>
+              title="Bearbeiten"
+            >
+              <MoreVertical className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Row 2: Route in one line */}
@@ -156,7 +214,10 @@ function ShipmentCard({
         {/* Row 3: compact stop details */}
         <div className="space-y-0.5">
           <p className="text-[11px] text-[#57688e] truncate">
-            A: {sendung.lade_adresse ? `${sendung.lade_adresse}, ` : ""}
+            A:{" "}
+            {sendung.lade_adresse != null && sendung.lade_adresse.trim() !== ""
+              ? `${sendung.lade_adresse}, `
+              : ""}
             {formatAddressLine(
               sendung.lade_plz,
               sendung.lade_ort,
@@ -164,7 +225,11 @@ function ShipmentCard({
             ) || "-"}
           </p>
           <p className="text-[11px] text-[#57688e] truncate">
-            Z: {sendung.entlade_adresse ? `${sendung.entlade_adresse}, ` : ""}
+            Z:{" "}
+            {sendung.entlade_adresse != null &&
+            sendung.entlade_adresse.trim() !== ""
+              ? `${sendung.entlade_adresse}, `
+              : ""}
             {formatAddressLine(
               sendung.entlade_plz,
               sendung.entlade_ort,
@@ -194,7 +259,8 @@ function ShipmentCard({
             <div className="flex items-center gap-1.5 shrink-0">
               <Tooltip title={resolvedCreatorName} variant="soft" size="sm">
                 <span className="inline-flex">
-                  {resolvedCreatorAvatarUrl ? (
+                  {resolvedCreatorAvatarUrl != null &&
+                  resolvedCreatorAvatarUrl.trim() !== "" ? (
                     <Image
                       src={resolvedCreatorAvatarUrl}
                       alt={resolvedCreatorName}
@@ -230,26 +296,67 @@ export function DashboardView() {
     null;
   const viewerAvatarUrl = user?.imageUrl ?? null;
   const { data: sendungen = [], isLoading: sendungenLoading } = useSendungen();
+  const cancelSendung = useCancelSendung();
+  const bulkCancelSendungen = useBulkCancelSendungen();
   const offeneSendungen = useMemo(
     () => sendungen.filter((s) => s.status === "offen"),
     [sendungen],
   );
+  const [selectedOffeneSendungIds, setSelectedOffeneSendungIds] = useState<
+    string[]
+  >([]);
+  const [confirmSingleCancel, setConfirmSingleCancel] = useState<{
+    id: string;
+    referenz: string;
+  } | null>(null);
   const [mainView, setMainView] = useState<"versandnetz" | "sendungen">(
     "versandnetz",
   );
   const [selectedKW, setSelectedKW] = useState<number | "all">(
     getISOWeek(new Date().toISOString()),
   );
+  const [isAuftraegePanelExpanded, setIsAuftraegePanelExpanded] =
+    useState(true);
   const availableKWs = useMemo(() => {
     const weeks = new Set(offeneSendungen.map((s) => getISOWeek(s.ladedatum)));
     return Array.from(weeks).sort((a, b) => a - b);
   }, [offeneSendungen]);
+  const [searchQuery, setSearchQuery] = useState("");
   const filteredSendungen = useMemo(() => {
-    if (selectedKW === "all") return offeneSendungen;
-    return offeneSendungen.filter(
-      (s) => getISOWeek(s.ladedatum) === selectedKW,
-    );
-  }, [offeneSendungen, selectedKW]);
+    let result =
+      selectedKW === "all"
+        ? offeneSendungen
+        : offeneSendungen.filter((s) => getISOWeek(s.ladedatum) === selectedKW);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (s) =>
+          s.referenz.toLowerCase().includes(q) ||
+          s.lade_ort.toLowerCase().includes(q) ||
+          s.entlade_ort.toLowerCase().includes(q) ||
+          (s.kunde != null && s.kunde.name.toLowerCase().includes(q)),
+      );
+    }
+    return result;
+  }, [offeneSendungen, selectedKW, searchQuery]);
+  useEffect(() => {
+    const visibleIds = new Set(filteredSendungen.map((s) => s.id));
+    setSelectedOffeneSendungIds((prev) => {
+      const next = prev.filter((id) => visibleIds.has(id));
+      if (next.length === prev.length) {
+        return prev;
+      }
+      return next;
+    });
+  }, [filteredSendungen]);
+
+  const pendingCancelSendungId =
+    cancelSendung.isPending && typeof cancelSendung.variables === "string"
+      ? cancelSendung.variables
+      : null;
+  const allFilteredSelected =
+    filteredSendungen.length > 0 &&
+    filteredSendungen.every((s) => selectedOffeneSendungIds.includes(s.id));
   const shipmentDialog = useDialog<SendungRow>();
   const sendungDetailDialog = useDialog<EnrichedSendung>();
   const [detailTruckId, setDetailTruckId] = useState<string | null>(null);
@@ -257,6 +364,7 @@ export function DashboardView() {
   const [editTruckEvent, setEditTruckEvent] = useState<CalendarEvent | null>(
     null,
   );
+  const [vorlagenOpen, setVorlagenOpen] = useState(false);
   const { data: trucks = [], isLoading: trucksLoading } = useTrucks();
   const { data: truckSendungen = [] } = useTruckSendungen();
   const assignSendung = useAssignSendung();
@@ -264,6 +372,45 @@ export function DashboardView() {
   const { data: relationen = [], isLoading: relationenLoading } =
     useRelationen();
   const createRelation = useCreateRelation();
+  const { data: vorlagen = [], isLoading: isVorlagenLoading } = useVorlagen();
+  const { data: truckVorlagen = [], isLoading: isTruckVorlagenLoading } =
+    useTruckVorlagen();
+  const generateStandaloneSendungen = useGenerateRecurringSendungen();
+  const generateTrucksWithShipments = useGenerateRecurringTrucksWithShipments();
+
+  // Run each generation exactly once after its query finishes loading.
+  // Using a ref prevents duplicate runs across re-renders.
+  const standaloneSendungenGenerationHasRunRef = useRef(false);
+  const truckGenerationHasRunRef = useRef(false);
+
+  useEffect(() => {
+    if (isVorlagenLoading || standaloneSendungenGenerationHasRunRef.current)
+      return;
+    standaloneSendungenGenerationHasRunRef.current = true;
+    const activeStandaloneVorlagen = vorlagen.filter(
+      (vorlage) =>
+        vorlage.active &&
+        vorlage.recurrence_type !== "none" &&
+        (vorlage.truck_vorlage_links?.length ?? 0) === 0,
+    );
+    if (activeStandaloneVorlagen.length) {
+      generateStandaloneSendungen.mutate(activeStandaloneVorlagen);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVorlagenLoading]);
+
+  useEffect(() => {
+    if (isTruckVorlagenLoading || truckGenerationHasRunRef.current) return;
+    truckGenerationHasRunRef.current = true;
+    const activeTruckVorlagen = truckVorlagen.filter(
+      (truckVorlage) =>
+        truckVorlage.active && truckVorlage.recurrence_type !== "none",
+    );
+    if (activeTruckVorlagen.length) {
+      generateTrucksWithShipments.mutate(activeTruckVorlagen);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTruckVorlagenLoading]);
 
   // Pre-index for O(1) lookups in derived memos
   const sendungenById = useMemo(
@@ -303,6 +450,12 @@ export function DashboardView() {
         ...s,
         fraechter_name: truck?.fraechter?.name ?? null,
         einkaufspreis: truck?.kosten ?? null,
+        truck_id: truck?.id ?? null,
+        truck_interne_ref: truck?.interne_ref ?? null,
+        truck_kennzeichen: truck?.kennzeichen ?? null,
+        truck_fahrer: truck?.fahrer ?? null,
+        truck_telefon_fahrer: truck?.telefon_fahrer ?? null,
+        truck_status: truck?.status ?? null,
       };
     });
   }, [sendungen, assignmentBySendungId, trucksById]);
@@ -333,6 +486,30 @@ export function DashboardView() {
     setDetailTruckId(truckId);
   };
 
+  const handleCancelSendung = (id: string) => {
+    cancelSendung.mutate(id, {
+      onSuccess: () => {
+        setSelectedOffeneSendungIds((prev) =>
+          prev.filter((selectedId) => selectedId !== id),
+        );
+        toast.success("Sendung storniert");
+      },
+      onError: () => toast.error("Fehler beim Stornieren"),
+    });
+  };
+
+  const handleBulkCancelSendungen = () => {
+    if (selectedOffeneSendungIds.length === 0) return;
+    bulkCancelSendungen.mutate(selectedOffeneSendungIds, {
+      onSuccess: () => {
+        const count = selectedOffeneSendungIds.length;
+        setSelectedOffeneSendungIds([]);
+        toast.success(`${count} Sendung${count === 1 ? "" : "en"} storniert`);
+      },
+      onError: () => toast.error("Fehler beim Stornieren"),
+    });
+  };
+
   const handleCreateRelation = (
     nummer: string,
     name: string,
@@ -352,12 +529,14 @@ export function DashboardView() {
     setEditTruckEvent(null);
   };
 
-  const detailTruck = detailTruckId
-    ? (trucks.find((t) => t.id === detailTruckId) ?? null)
-    : null;
-  const detailSendungen = detailTruckId
-    ? (truckSendungenMap.get(detailTruckId) ?? [])
-    : [];
+  const detailTruck =
+    detailTruckId != null && detailTruckId !== ""
+      ? (trucks.find((t) => t.id === detailTruckId) ?? null)
+      : null;
+  const detailSendungen =
+    detailTruckId != null && detailTruckId !== ""
+      ? (truckSendungenMap.get(detailTruckId) ?? [])
+      : [];
 
   return (
     <>
@@ -407,7 +586,7 @@ export function DashboardView() {
                 <section className="shrink-0 border-b border-[#0f172b]/10 bg-[#f8f9fb] flex flex-col">
                   {/* Header row */}
                   <div
-                    className={`flex items-center gap-2 px-3 h-11 shrink-0 ${sendungenLoading || offeneSendungen.length > 0 ? "border-b border-[#0f172b]/10" : ""}`}
+                    className={`flex items-center gap-2 px-3 h-11 shrink-0 ${isAuftraegePanelExpanded && (sendungenLoading || offeneSendungen.length > 0) ? "border-b border-[#0f172b]/10" : ""}`}
                   >
                     <Package className="h-4 w-4 text-[#155dfc]" />
                     <h3 className="text-sm font-semibold text-[#0f172b]">
@@ -447,13 +626,24 @@ export function DashboardView() {
                       </div>
                     )}
 
+                    <Input
+                      size="sm"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Suchen…"
+                      sx={{
+                        ml: "auto",
+                        width: 150,
+                        fontSize: "0.75rem",
+                        "--Input-focusedHighlight": "#155dfc",
+                      }}
+                    />
                     <Button
                       size="sm"
                       variant="plain"
                       startDecorator={<Plus className="h-3 w-3" />}
                       onClick={() => shipmentDialog.onOpen()}
                       sx={{
-                        ml: "auto",
                         fontSize: "0.7rem",
                         color: "#57688e",
                         minHeight: 0,
@@ -463,54 +653,175 @@ export function DashboardView() {
                     >
                       Neuer Auftrag
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="plain"
+                      startDecorator={<RepeatIcon className="h-3 w-3" />}
+                      onClick={() => setVorlagenOpen(true)}
+                      sx={{
+                        fontSize: "0.7rem",
+                        color: "#57688e",
+                        minHeight: 0,
+                        px: 0.75,
+                        py: 0.25,
+                      }}
+                    >
+                      Wiederkehrende Aufträge
+                    </Button>
+
+                    <IconButton
+                      size="sm"
+                      variant="plain"
+                      color="neutral"
+                      onClick={() =>
+                        setIsAuftraegePanelExpanded((prev) => !prev)
+                      }
+                      aria-expanded={isAuftraegePanelExpanded}
+                      aria-label={
+                        isAuftraegePanelExpanded
+                          ? "Sendeaufträge einklappen"
+                          : "Sendeaufträge ausklappen"
+                      }
+                      sx={{ ml: 0.5 }}
+                    >
+                      <motion.span
+                        animate={{ rotate: isAuftraegePanelExpanded ? 180 : 0 }}
+                        transition={{ duration: 0.25, ease: "easeOut" }}
+                        className="inline-flex"
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </motion.span>
+                    </IconButton>
                   </div>
 
-                  {/* Card strip — only when loading or there are open shipments */}
-                  {(sendungenLoading || offeneSendungen.length > 0) && (
-                    <div className="overflow-x-auto flex flex-row gap-2 p-2 h-56">
-                      {sendungenLoading ? (
-                        <div className="flex gap-2">
-                          {Array.from({ length: 4 }).map((_, i) => (
-                            <div
-                              key={i}
-                              className="w-64 shrink-0 rounded-lg border border-[#0f172b]/5 bg-white p-2.5 animate-pulse"
+                  <AnimatePresence initial={false}>
+                    {isAuftraegePanelExpanded && (
+                      <motion.div
+                        key="sendeauftraege-panel-content"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                        className="overflow-hidden"
+                      >
+                        {selectedOffeneSendungIds.length > 0 && (
+                          <div className="flex items-center gap-2 px-3 py-2 border-b border-[#0f172b]/10 bg-white">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const shouldSelectAll = !allFilteredSelected;
+                                setSelectedOffeneSendungIds(
+                                  shouldSelectAll
+                                    ? filteredSendungen.map((s) => s.id)
+                                    : [],
+                                );
+                              }}
+                              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-[#57688e] hover:bg-[#155dfc]/10 hover:text-[#155dfc]"
                             >
-                              <div className="h-3 w-24 bg-slate-200 rounded mb-2" />
-                              <div className="h-2.5 w-full bg-slate-100 rounded mb-1.5" />
-                              <div className="h-2.5 w-3/4 bg-slate-100 rounded mb-1.5" />
-                              <div className="flex gap-1.5 mt-2">
-                                <div className="h-4 w-12 bg-slate-100 rounded" />
-                                <div className="h-4 w-14 bg-slate-100 rounded" />
+                              <Check className="h-3 w-3" />
+                              {allFilteredSelected
+                                ? "Auswahl aufheben"
+                                : "Alle sichtbaren"}
+                            </button>
+                            <span className="text-[11px] text-[#57688e]">
+                              {selectedOffeneSendungIds.length} ausgewählt
+                            </span>
+                            <Button
+                              size="sm"
+                              color="danger"
+                              variant="soft"
+                              startDecorator={
+                                <CircleX className="h-3.5 w-3.5" />
+                              }
+                              loading={bulkCancelSendungen.isPending}
+                              onClick={handleBulkCancelSendungen}
+                              sx={{
+                                ml: "auto",
+                                fontSize: "0.7rem",
+                                minHeight: 0,
+                                px: 1,
+                                py: 0.35,
+                              }}
+                            >
+                              Ausgewählte stornieren
+                            </Button>
+                          </div>
+                        )}
+
+                        {/* Card strip — only when loading or there are open shipments */}
+                        {(sendungenLoading || offeneSendungen.length > 0) && (
+                          <div className="overflow-x-auto flex flex-row gap-2 p-2 h-56">
+                            {sendungenLoading ? (
+                              <div className="flex gap-2">
+                                {Array.from({ length: 4 }).map((_, i) => (
+                                  <div
+                                    key={i}
+                                    className="w-64 shrink-0 rounded-lg border border-[#0f172b]/5 bg-white p-2.5 animate-pulse"
+                                  >
+                                    <div className="h-3 w-24 bg-slate-200 rounded mb-2" />
+                                    <div className="h-2.5 w-full bg-slate-100 rounded mb-1.5" />
+                                    <div className="h-2.5 w-3/4 bg-slate-100 rounded mb-1.5" />
+                                    <div className="flex gap-1.5 mt-2">
+                                      <div className="h-4 w-12 bg-slate-100 rounded" />
+                                      <div className="h-4 w-14 bg-slate-100 rounded" />
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : filteredSendungen.length === 0 ? (
-                        <div className="flex items-center justify-center w-full">
-                          <p className="text-xs text-[#57688e]">
-                            Keine Aufträge in KW {selectedKW}
-                          </p>
-                        </div>
-                      ) : (
-                        filteredSendungen.map((s, i) => (
-                          <motion.div
-                            key={s.id}
-                            className="w-64 shrink-0"
-                            initial={{ opacity: 0, x: 8 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.2, delay: i * 0.03 }}
-                          >
-                            <ShipmentCard
-                              sendung={s}
-                              onEdit={() => shipmentDialog.onOpen(s)}
-                              fallbackCreatorName={viewerDisplayName}
-                              fallbackCreatorAvatarUrl={viewerAvatarUrl}
-                            />
-                          </motion.div>
-                        ))
-                      )}
-                    </div>
-                  )}
+                            ) : filteredSendungen.length === 0 ? (
+                              <div className="flex items-center justify-center w-full">
+                                <p className="text-xs text-[#57688e]">
+                                  Keine Aufträge in KW {selectedKW}
+                                </p>
+                              </div>
+                            ) : (
+                              filteredSendungen.map((s, i) => (
+                                <motion.div
+                                  key={s.id}
+                                  className="w-64 shrink-0"
+                                  initial={{ opacity: 0, x: 8 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{
+                                    duration: 0.2,
+                                    delay: i * 0.03,
+                                  }}
+                                >
+                                  <ShipmentCard
+                                    sendung={s}
+                                    onCancel={() =>
+                                      setConfirmSingleCancel({
+                                        id: s.id,
+                                        referenz: s.referenz,
+                                      })
+                                    }
+                                    onToggleSelect={(checked) => {
+                                      setSelectedOffeneSendungIds((prev) => {
+                                        if (checked) {
+                                          return prev.includes(s.id)
+                                            ? prev
+                                            : [...prev, s.id];
+                                        }
+                                        return prev.filter((id) => id !== s.id);
+                                      });
+                                    }}
+                                    isSelected={selectedOffeneSendungIds.includes(
+                                      s.id,
+                                    )}
+                                    isCancelPending={
+                                      pendingCancelSendungId === s.id
+                                    }
+                                    onEdit={() => shipmentDialog.onOpen(s)}
+                                    fallbackCreatorName={viewerDisplayName}
+                                    fallbackCreatorAvatarUrl={viewerAvatarUrl}
+                                  />
+                                </motion.div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </section>
 
                 {/* Main view: Versandnetz */}
@@ -572,14 +883,20 @@ export function DashboardView() {
         onClose={() => setDetailTruckId(null)}
         onEditTruck={(truck) => {
           // Build a CalendarEvent-like object for TruckForm
-          const start = dayjs(
-            `${truck.ladedatum}T${truck.ladezeit || "08:00"}:00`,
-          );
+          const truckLadezeit =
+            truck.ladezeit != null && truck.ladezeit.trim() !== ""
+              ? truck.ladezeit
+              : "08:00";
+          const truckFahrer =
+            truck.fahrer != null && truck.fahrer.trim() !== ""
+              ? truck.fahrer
+              : "";
+          const start = dayjs(`${truck.ladedatum}T${truckLadezeit}:00`);
           const end = start.add(2, "hour");
           const truckCalendarEvent = {
             id: `truck-${truck.id}`,
             title: truck.kennzeichen,
-            description: truck.fahrer || "",
+            description: truckFahrer,
             start,
             end,
             allDay: false,
@@ -600,6 +917,11 @@ export function DashboardView() {
         onDropSendung={handleDropSendung}
       />
 
+      <VorlagenSlideOver
+        open={vorlagenOpen}
+        onClose={() => setVorlagenOpen(false)}
+      />
+
       <TruckForm
         open={truckFormOpen}
         selectedEvent={editTruckEvent}
@@ -616,6 +938,55 @@ export function DashboardView() {
           setEditTruckEvent(null);
         }}
       />
+
+      {confirmSingleCancel && (
+        <div
+          className="fixed inset-0 z-1400 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setConfirmSingleCancel(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-[#0f172b]/10 bg-white p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-2">
+              <div className="mt-0.5 rounded-full bg-red-50 p-1.5 text-red-600">
+                <TriangleAlert className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#0f172b]">
+                  Sendung wirklich stornieren?
+                </p>
+                <p className="mt-1 text-xs text-[#57688e]">
+                  Sendung {confirmSingleCancel.referenz} wird auf
+                  &quot;storniert&quot; gesetzt.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                size="sm"
+                variant="plain"
+                color="neutral"
+                onClick={() => setConfirmSingleCancel(null)}
+              >
+                Abbrechen
+              </Button>
+              <Button
+                size="sm"
+                color="danger"
+                variant="solid"
+                onClick={() => {
+                  handleCancelSendung(confirmSingleCancel.id);
+                  setConfirmSingleCancel(null);
+                }}
+              >
+                Ja, stornieren
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

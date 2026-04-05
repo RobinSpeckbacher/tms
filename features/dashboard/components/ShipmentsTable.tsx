@@ -1,16 +1,25 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import type { SendungRow } from "@/hooks/useSendungen";
+import { useBulkCancelSendungen, type SendungRow } from "@/hooks/useSendungen";
 import Typography from "@mui/joy/Typography";
-import { FileCheck, FileX } from "lucide-react";
+import Button from "@mui/joy/Button";
+import Checkbox from "@mui/joy/Checkbox";
+import { FileCheck, FileX, CircleX } from "lucide-react";
 import { DataTable } from "@/components/common/DataTable";
+import { toast } from "react-toastify";
 
 /* ── Enriched row with carrier/cost from truck assignment ────────── */
 export interface EnrichedSendung extends SendungRow {
   fraechter_name: string | null;
   einkaufspreis: number | null;
+  truck_id: string | null;
+  truck_interne_ref: string | null;
+  truck_kennzeichen: string | null;
+  truck_fahrer: string | null;
+  truck_telefon_fahrer: string | null;
+  truck_status: string | null;
 }
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
@@ -40,6 +49,10 @@ function weight(kg: number | null | undefined) {
     : `${kg} kg`;
 }
 
+function hasText(value: string | null | undefined): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   offen: { bg: "bg-amber-50", text: "text-amber-700" },
   zugewiesen: { bg: "bg-blue-50", text: "text-blue-700" },
@@ -67,6 +80,47 @@ export default function ShipmentsTable({
   sendungen,
   onRowClick,
 }: ShipmentsTableProps) {
+  const bulkCancelSendungen = useBulkCancelSendungen();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const cancellableIds = useMemo(
+    () => sendungen.filter((s) => s.status !== "storniert").map((s) => s.id),
+    [sendungen],
+  );
+  const allCancellableSelected =
+    cancellableIds.length > 0 &&
+    cancellableIds.every((id) => selectedIds.includes(id));
+  const selectedCancellableCount = selectedIds.filter((id) =>
+    cancellableIds.includes(id),
+  ).length;
+
+  const toggleSelected = useCallback((id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      if (checked) {
+        return prev.includes(id) ? prev : [...prev, id];
+      }
+      return prev.filter((selectedId) => selectedId !== id);
+    });
+  }, []);
+
+  const handleBulkCancel = useCallback(() => {
+    if (selectedCancellableCount === 0) return;
+    const targetIds = selectedIds.filter((id) => cancellableIds.includes(id));
+    bulkCancelSendungen.mutate(targetIds, {
+      onSuccess: () => {
+        const count = targetIds.length;
+        setSelectedIds([]);
+        toast.success(`${count} Sendung${count === 1 ? "" : "en"} storniert`);
+      },
+      onError: () => toast.error("Fehler beim Stornieren"),
+    });
+  }, [
+    bulkCancelSendungen,
+    cancellableIds,
+    selectedCancellableCount,
+    selectedIds,
+  ]);
+
   /* Pre-compute totals for footer */
   const totals = useMemo(() => {
     const totalVk = sum(sendungen, "verkaufspreis");
@@ -94,10 +148,47 @@ export default function ShipmentsTable({
   const columns = useMemo<ColumnDef<EnrichedSendung, unknown>[]>(
     () => [
       {
+        id: "select",
+        header: () => (
+          <Checkbox
+            size="sm"
+            checked={allCancellableSelected}
+            indeterminate={
+              selectedCancellableCount > 0 && !allCancellableSelected
+            }
+            onChange={(e) =>
+              setSelectedIds(e.target.checked ? cancellableIds : [])
+            }
+            slotProps={{ input: { "aria-label": "Alle Sendungen auswählen" } }}
+          />
+        ),
+        cell: ({ row: { original } }) => {
+          const isStorniert = original.status === "storniert";
+          return (
+            <div onClick={(e) => e.stopPropagation()}>
+              <Checkbox
+                size="sm"
+                checked={selectedIds.includes(original.id)}
+                disabled={isStorniert}
+                onChange={(e) => toggleSelected(original.id, e.target.checked)}
+                slotProps={{
+                  input: {
+                    "aria-label": `Sendung ${original.referenz} auswählen`,
+                  },
+                }}
+              />
+            </div>
+          );
+        },
+        enableSorting: false,
+      },
+      {
         accessorKey: "referenz",
         header: "Sendungsnr.",
-        cell: ({ getValue }) => (
-          <span className="font-semibold text-[#0f172b]">
+        cell: ({ getValue, row: { original } }) => (
+          <span
+            className={`font-semibold text-[#0f172b] ${original.status === "storniert" ? "line-through text-[#57688e]" : ""}`}
+          >
             {getValue<string>()}
           </span>
         ),
@@ -124,9 +215,9 @@ export default function ShipmentsTable({
       {
         id: "cmr",
         header: "CMR",
-        accessorFn: (row) => (row.cmr_path ? "ja" : "nein"),
+        accessorFn: (row) => (hasText(row.cmr_path) ? "ja" : "nein"),
         cell: ({ row: { original } }) =>
-          original.cmr_path ? (
+          hasText(original.cmr_path) ? (
             <span
               className="inline-flex items-center gap-1 text-emerald-600"
               title={`CMR: ${original.cmr_file_name ?? "vorhanden"}`}
@@ -157,14 +248,14 @@ export default function ShipmentsTable({
         accessorKey: "lade_plz",
         header: "PLZ",
         cell: ({ getValue }) => (
-          <span className="text-[#57688e]">{getValue<string>() ?? "—"}</span>
+          <span className="text-[#57688e]">{getValue<string>()}</span>
         ),
       },
       {
         accessorKey: "lade_land",
         header: "Land",
         cell: ({ getValue }) => (
-          <span className="text-[#57688e]">{getValue<string>() ?? "—"}</span>
+          <span className="text-[#57688e]">{getValue<string>()}</span>
         ),
       },
       {
@@ -175,14 +266,14 @@ export default function ShipmentsTable({
         accessorKey: "entlade_plz",
         header: "PLZ",
         cell: ({ getValue }) => (
-          <span className="text-[#57688e]">{getValue<string>() ?? "—"}</span>
+          <span className="text-[#57688e]">{getValue<string>()}</span>
         ),
       },
       {
         accessorKey: "entlade_land",
         header: "Land",
         cell: ({ getValue }) => (
-          <span className="text-[#57688e]">{getValue<string>() ?? "—"}</span>
+          <span className="text-[#57688e]">{getValue<string>()}</span>
         ),
       },
       {
@@ -241,8 +332,9 @@ export default function ShipmentsTable({
         id: "marge",
         header: "Marge (€)",
         accessorFn: (row) => {
-          if (row.verkaufspreis == null || row.einkaufspreis == null)
+          if (row.verkaufspreis == null || row.einkaufspreis == null) {
             return null;
+          }
           return row.verkaufspreis - row.einkaufspreis;
         },
         cell: ({ getValue }) => {
@@ -272,7 +364,14 @@ export default function ShipmentsTable({
         ),
       },
     ],
-    [totals],
+    [
+      allCancellableSelected,
+      cancellableIds,
+      selectedCancellableCount,
+      selectedIds,
+      toggleSelected,
+      totals,
+    ],
   );
 
   return (
@@ -285,10 +384,40 @@ export default function ShipmentsTable({
           {sendungen.length}
         </span>
       </div>
+      {selectedCancellableCount > 0 && (
+        <div className="flex items-center gap-2 border-b border-[#0f172b]/10 bg-[#f8f9fb] px-4 py-2">
+          <span className="text-xs text-[#57688e]">
+            {selectedCancellableCount} ausgewählt
+          </span>
+          <Button
+            size="sm"
+            variant="soft"
+            color="danger"
+            startDecorator={<CircleX className="h-3.5 w-3.5" />}
+            loading={bulkCancelSendungen.isPending}
+            onClick={handleBulkCancel}
+            sx={{ fontSize: "0.7rem", minHeight: 0, px: 1, py: 0.3 }}
+          >
+            Ausgewählte stornieren
+          </Button>
+          <Button
+            size="sm"
+            variant="plain"
+            color="neutral"
+            onClick={() => setSelectedIds([])}
+            sx={{ fontSize: "0.7rem", minHeight: 0, px: 0.75, py: 0.3 }}
+          >
+            Auswahl aufheben
+          </Button>
+        </div>
+      )}
       <DataTable
         columns={columns}
         data={sendungen}
         onRowClick={onRowClick}
+        getRowClassName={(row) =>
+          row.status === "storniert" ? "bg-[#fff5f5] text-[#57688e]" : ""
+        }
         searchPlaceholder="Sendung suchen…"
         emptyMessage="Keine Sendungen vorhanden"
         noResultsMessage="Keine Treffer für diese Suche"

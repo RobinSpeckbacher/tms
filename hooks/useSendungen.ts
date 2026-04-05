@@ -25,6 +25,7 @@ export interface SendungRow {
   anzahl: number | null;
   lademeter: number | null;
   verkaufspreis: number | null;
+  vorlage_id: string | null;
   status: string;
   cmr_path: string | null;
   cmr_file_name: string | null;
@@ -36,6 +37,7 @@ export interface SendungRow {
 
 export interface SendungInput {
   referenz: string;
+  vorlage_id?: string | null;
   kunde_id?: string | null;
   lade_plz?: string | null;
   lade_ort: string;
@@ -62,7 +64,9 @@ function useSupabase() {
   const { getToken } = useAuth();
   return async () => {
     const token = await getToken();
-    return token ? createAuthClient(token) : createClient();
+    return token != null && token.trim() !== ""
+      ? createAuthClient(token)
+      : createClient();
   };
 }
 
@@ -74,14 +78,20 @@ export function useSendungen() {
     queryKey: ["sendungen"],
     queryFn: async () => {
       const supabase = await getSupabase();
-      const { data, error } = await supabase
+      const result = (await supabase
         .from("sendungen")
         .select("*, kunde:unternehmen!kunde_id(id, name, kundennummer, adresse, plz, ort, land)")
         .is("deleted_at", null)
-        .order("created_at", { ascending: false });
+        .order("ladedatum", { ascending: true })
+        .order("ladezeit", { ascending: true, nullsFirst: false })) as {
+        data: SendungRow[] | null;
+        error: unknown;
+      };
 
-      if (error) throw error;
-      return data;
+      const { data, error } = result;
+
+      if (error != null) throw error;
+      return data ?? [];
     },
   });
 }
@@ -94,17 +104,23 @@ export function useCreateSendung() {
   return useMutation({
     mutationFn: async (input: SendungInput) => {
       const supabase = await getSupabase();
-      const { data, error } = await supabase
+      const result = (await supabase
         .from("sendungen")
         .insert(input)
         .select()
-        .single();
+        .single()) as {
+        data: SendungRow | null;
+        error: unknown;
+      };
 
-      if (error) throw error;
-      return data as SendungRow;
+      const { data, error } = result;
+
+      if (error != null) throw error;
+      if (data == null) throw new Error("Sendung konnte nicht erstellt werden");
+      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sendungen"] });
+      void queryClient.invalidateQueries({ queryKey: ["sendungen"] });
     },
   });
 }
@@ -117,18 +133,24 @@ export function useUpdateSendung() {
   return useMutation({
     mutationFn: async ({ id, ...input }: Partial<SendungInput> & { id: string }) => {
       const supabase = await getSupabase();
-      const { data, error } = await supabase
+      const result = (await supabase
         .from("sendungen")
         .update(input)
         .eq("id", id)
         .select("*, kunde:unternehmen!kunde_id(id, name, kundennummer, adresse, plz, ort, land)")
-        .single();
+        .single()) as {
+        data: SendungRow | null;
+        error: unknown;
+      };
 
-      if (error) throw error;
-      return data as SendungRow;
+      const { data, error } = result;
+
+      if (error != null) throw error;
+      if (data == null) throw new Error("Sendung konnte nicht aktualisiert werden");
+      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sendungen"] });
+      void queryClient.invalidateQueries({ queryKey: ["sendungen"] });
     },
   });
 }
@@ -149,7 +171,49 @@ export function useDeleteSendung() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sendungen"] });
+      void queryClient.invalidateQueries({ queryKey: ["sendungen"] });
+    },
+  });
+}
+
+/* ── Cancel (status → storniert, stays visible in Sendungen) ────────── */
+export function useCancelSendung() {
+  const getSupabase = useSupabase();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const supabase = await getSupabase();
+      const { error } = await supabase
+        .from("sendungen")
+        .update({ status: "storniert" })
+        .eq("id", id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["sendungen"] });
+    },
+  });
+}
+
+/* ── Bulk cancel (status → storniert for multiple ids) ──────────────── */
+export function useBulkCancelSendungen() {
+  const getSupabase = useSupabase();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const supabase = await getSupabase();
+      const { error } = await supabase
+        .from("sendungen")
+        .update({ status: "storniert" })
+        .in("id", ids);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["sendungen"] });
     },
   });
 }

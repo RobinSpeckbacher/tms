@@ -11,6 +11,7 @@ import {
   FileText,
   Upload,
   Trash2,
+  TriangleAlert,
   ExternalLink,
   Eye,
   EyeOff,
@@ -22,7 +23,7 @@ import SlideOver from "@/components/common/SlideOver";
 import Image from "next/image";
 import type { EnrichedSendung } from "./ShipmentsTable";
 import { useUploadCmr, useDeleteCmr, useGetCmrUrl } from "@/hooks/useCmr";
-import { useUpdateSendung } from "@/hooks/useSendungen";
+import { useDeleteSendung, useUpdateSendung } from "@/hooks/useSendungen";
 import { useDistance } from "@/hooks/useDistance";
 import { toast } from "react-toastify";
 import Button from "@mui/joy/Button";
@@ -34,14 +35,24 @@ import CircularProgress from "@mui/joy/CircularProgress";
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
 function formatDate(iso: string | null) {
-  if (!iso) return "—";
-  return dayjs(iso).format("DD.MM.YYYY");
+  const normalizedIso = typeof iso === "string" ? iso.trim() : null;
+  if (normalizedIso === null || normalizedIso === "") return "—";
+  return dayjs(normalizedIso).format("DD.MM.YYYY");
 }
 
 function formatDateTime(date: string | null, time: string | null) {
-  if (!date) return "—";
-  const d = dayjs(date).format("DD.MM.YYYY");
-  return time ? `${d} ${time.slice(0, 5)}` : d;
+  const normalizedDate = typeof date === "string" ? date.trim() : null;
+  if (normalizedDate === null || normalizedDate === "") return "—";
+
+  const d = dayjs(normalizedDate).format("DD.MM.YYYY");
+  const normalizedTime = typeof time === "string" ? time.trim() : null;
+  if (normalizedTime === null || normalizedTime === "") return d;
+
+  return `${d} ${normalizedTime.slice(0, 5)}`;
+}
+
+function hasText(value: string | null | undefined): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function eur(value: number | null | undefined) {
@@ -134,25 +145,37 @@ export default function SendungDetailModal({
 }: SendungDetailModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmDeleteSendungOpen, setConfirmDeleteSendungOpen] =
+    useState(false);
   const uploadCmr = useUploadCmr();
   const deleteCmr = useDeleteCmr();
+  const deleteSendung = useDeleteSendung();
   const getCmrUrl = useGetCmrUrl();
   const updateSendung = useUpdateSendung();
 
+  const ladePlz = sendung?.lade_plz;
+  const ladeOrt = sendung?.lade_ort;
+  const ladeLand = sendung?.lade_land ?? "AT";
+  const entladePlz = sendung?.entlade_plz;
+  const entladeOrt = sendung?.entlade_ort;
+  const entladeLand = sendung?.entlade_land ?? "AT";
+  const cmrPath = sendung?.cmr_path;
+
   // Distance between Ladeort ↔ Entladeort
   const { distance, isLoading: distanceLoading } = useDistance(
-    sendung?.lade_plz && sendung.lade_ort
+    hasText(ladePlz) && hasText(ladeOrt)
       ? {
-          plz: sendung.lade_plz,
-          ort: sendung.lade_ort,
-          land: sendung.lade_land ?? "AT",
+          plz: ladePlz,
+          ort: ladeOrt,
+          land: ladeLand,
         }
       : null,
-    sendung?.entlade_plz && sendung.entlade_ort
+    hasText(entladePlz) && hasText(entladeOrt)
       ? {
-          plz: sendung.entlade_plz,
-          ort: sendung.entlade_ort,
-          land: sendung.entlade_land ?? "AT",
+          plz: entladePlz,
+          ort: entladeOrt,
+          land: entladeLand,
         }
       : null,
   );
@@ -160,11 +183,15 @@ export default function SendungDetailModal({
   // CMR preview via react-query
   const { data: previewUrl, isLoading: previewLoading } = useQuery({
     queryKey: ["cmr-preview", sendung?.id, sendung?.cmr_path],
-    queryFn: () => getCmrUrl(sendung!.cmr_path!),
-    enabled: !!sendung?.cmr_path,
+    queryFn: () =>
+      hasText(cmrPath) ? getCmrUrl(cmrPath) : Promise.resolve(null),
+    enabled: hasText(cmrPath),
   });
 
-  const isPdf = sendung?.cmr_file_name?.toLowerCase().endsWith(".pdf");
+  const cmrFileName = sendung?.cmr_file_name;
+  const isPdf = hasText(cmrFileName)
+    ? cmrFileName.toLowerCase().endsWith(".pdf")
+    : false;
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,10 +212,18 @@ export default function SendungDetailModal({
     [sendung, uploadCmr],
   );
 
+  const handleRequestDeleteCmr = useCallback(() => {
+    if (!sendung) return;
+    setConfirmDeleteOpen(true);
+  }, [sendung]);
+
   const handleDeleteCmr = useCallback(() => {
     if (!sendung) return;
     deleteCmr.mutate(sendung.id, {
-      onSuccess: () => toast.success("CMR entfernt"),
+      onSuccess: () => {
+        setConfirmDeleteOpen(false);
+        toast.success("CMR entfernt");
+      },
       onError: () => toast.error("Fehler beim Entfernen"),
     });
   }, [sendung, deleteCmr]);
@@ -196,7 +231,7 @@ export default function SendungDetailModal({
   const handleOpenCmr = useCallback(async () => {
     if (!sendung) return;
     const url = await getCmrUrl(sendung.id);
-    if (url) {
+    if (hasText(url)) {
       window.open(url, "_blank", "noopener,noreferrer");
     } else {
       toast.error("Datei nicht gefunden");
@@ -205,7 +240,9 @@ export default function SendungDetailModal({
 
   const handleStatusChange = useCallback(
     (_e: unknown, value: string | null) => {
-      if (!value || !sendung) return;
+      if (!sendung) return;
+      if (!hasText(value)) return;
+
       updateSendung.mutate(
         { id: sendung.id, status: value },
         {
@@ -217,9 +254,26 @@ export default function SendungDetailModal({
     [sendung, updateSendung],
   );
 
+  const handleRequestDeleteSendung = useCallback(() => {
+    if (!sendung) return;
+    setConfirmDeleteSendungOpen(true);
+  }, [sendung]);
+
+  const handleDeleteSendung = useCallback(() => {
+    if (!sendung) return;
+    deleteSendung.mutate(sendung.id, {
+      onSuccess: () => {
+        setConfirmDeleteSendungOpen(false);
+        toast.success("Sendung gelöscht");
+        onClose();
+      },
+      onError: () => toast.error("Fehler beim Löschen"),
+    });
+  }, [deleteSendung, onClose, sendung]);
+
   if (!sendung) return null;
 
-  const hasCmr = !!sendung.cmr_path;
+  const hasCmr = hasText(sendung.cmr_path);
   const marge =
     sendung.verkaufspreis != null && sendung.einkaufspreis != null
       ? sendung.verkaufspreis - sendung.einkaufspreis
@@ -245,6 +299,16 @@ export default function SendungDetailModal({
           Bearbeiten
         </Button>
       )}
+      <Button
+        variant="outlined"
+        color="danger"
+        size="sm"
+        startDecorator={<Trash2 className="h-3.5 w-3.5" />}
+        onClick={handleRequestDeleteSendung}
+        sx={{ fontWeight: 500 }}
+      >
+        Sendung löschen
+      </Button>
       <Button
         variant="plain"
         color="neutral"
@@ -327,7 +391,9 @@ export default function SendungDetailModal({
               </button>
               <button
                 type="button"
-                onClick={handleOpenCmr}
+                onClick={() => {
+                  void handleOpenCmr();
+                }}
                 className="rounded p-1.5 text-[#57688e] hover:bg-[#155dfc]/10 hover:text-[#155dfc] transition-colors"
                 title="Öffnen"
               >
@@ -335,12 +401,12 @@ export default function SendungDetailModal({
               </button>
               <button
                 type="button"
-                onClick={handleDeleteCmr}
+                onClick={handleRequestDeleteCmr}
                 disabled={deleteCmr.isPending}
                 className="rounded p-1.5 text-[#57688e] hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-50"
-                title="Entfernen"
+                title="CMR löschen"
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <TriangleAlert className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
@@ -413,7 +479,7 @@ export default function SendungDetailModal({
               <div className="flex items-center justify-center py-8">
                 <CircularProgress size="sm" />
               </div>
-            ) : previewUrl ? (
+            ) : hasText(previewUrl) ? (
               <div className="rounded-md overflow-hidden border border-[#0f172b]/10 bg-white">
                 {isPdf ? (
                   <iframe
@@ -485,7 +551,7 @@ export default function SendungDetailModal({
           <p className="text-[0.65rem] text-[#57688e]">
             {sendung.lade_plz} {sendung.lade_land}
           </p>
-          {sendung.lade_adresse && (
+          {hasText(sendung.lade_adresse) && (
             <p className="text-[0.65rem] text-[#57688e]">
               {sendung.lade_adresse}
             </p>
@@ -504,7 +570,7 @@ export default function SendungDetailModal({
           <p className="text-[0.65rem] text-[#57688e]">
             {sendung.entlade_plz} {sendung.entlade_land}
           </p>
-          {sendung.entlade_adresse && (
+          {hasText(sendung.entlade_adresse) && (
             <p className="text-[0.65rem] text-[#57688e]">
               {sendung.entlade_adresse}
             </p>
@@ -513,14 +579,14 @@ export default function SendungDetailModal({
       </div>
 
       {/* Distance indicator */}
-      {(distance || distanceLoading) && (
+      {(distance != null || distanceLoading === true) && (
         <div className="mt-2 flex items-center gap-2 rounded-md bg-[#f1f5f9] px-3 py-1.5">
           <Truck className="h-3.5 w-3.5 text-[#155dfc] shrink-0" />
-          {distanceLoading ? (
+          {distanceLoading === true ? (
             <span className="text-[0.7rem] text-[#57688e]">
               Entfernung wird berechnet…
             </span>
-          ) : distance ? (
+          ) : distance != null ? (
             <span className="text-[0.7rem] text-[#0f172b] font-medium">
               {distance.distanceFormatted} &middot; {distance.durationFormatted}{" "}
               Fahrzeit
@@ -556,7 +622,7 @@ export default function SendungDetailModal({
           icon={Layers}
           label="Packstücke"
           value={
-            sendung.anzahl != null && sendung.packungseinheit
+            sendung.anzahl != null && hasText(sendung.packungseinheit)
               ? `${sendung.anzahl} ${PE_LABELS[sendung.packungseinheit] ?? sendung.packungseinheit}`
               : "—"
           }
@@ -580,6 +646,23 @@ export default function SendungDetailModal({
           label="Frächter"
           value={sendung.fraechter_name ?? "—"}
         />
+      </div>
+
+      {/* ── LKW Details ─────────────────────────────────────────── */}
+      <Section title="LKW Details" />
+      <div className="grid grid-cols-2 gap-x-4">
+        <InfoRow
+          icon={Truck}
+          label="Kennzeichen"
+          value={sendung.truck_kennzeichen ?? "—"}
+        />
+        <InfoRow label="Interne Ref" value={sendung.truck_interne_ref ?? "—"} />
+        <InfoRow label="Fahrer" value={sendung.truck_fahrer ?? "—"} />
+        <InfoRow
+          label="Telefon Fahrer"
+          value={sendung.truck_telefon_fahrer ?? "—"}
+        />
+        <InfoRow label="Truck Status" value={sendung.truck_status ?? "—"} />
       </div>
 
       {/* ── Finanzen ─────────────────────────────────────────────── */}
@@ -606,6 +689,99 @@ export default function SendungDetailModal({
           }
         />
       </div>
+
+      {confirmDeleteOpen && (
+        <div
+          className="fixed inset-0 z-1400 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setConfirmDeleteOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-[#0f172b]/10 bg-white p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-2">
+              <div className="mt-0.5 rounded-full bg-red-50 p-1.5 text-red-600">
+                <TriangleAlert className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#0f172b]">
+                  CMR wirklich löschen?
+                </p>
+                <p className="mt-1 text-xs text-[#57688e]">
+                  Diese Aktion entfernt das CMR-Dokument von Sendung{" "}
+                  {sendung.referenz}.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                size="sm"
+                variant="plain"
+                color="neutral"
+                onClick={() => setConfirmDeleteOpen(false)}
+              >
+                Abbrechen
+              </Button>
+              <Button
+                size="sm"
+                color="danger"
+                variant="solid"
+                loading={deleteCmr.isPending}
+                onClick={handleDeleteCmr}
+              >
+                Ja, löschen
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmDeleteSendungOpen && (
+        <div
+          className="fixed inset-0 z-1400 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setConfirmDeleteSendungOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-[#0f172b]/10 bg-white p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-2">
+              <div className="mt-0.5 rounded-full bg-red-50 p-1.5 text-red-600">
+                <Trash2 className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#0f172b]">
+                  Sendung wirklich löschen?
+                </p>
+                <p className="mt-1 text-xs text-[#57688e]">
+                  Diese Aktion löscht die Sendung {sendung.referenz}.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                size="sm"
+                variant="plain"
+                color="neutral"
+                onClick={() => setConfirmDeleteSendungOpen(false)}
+              >
+                Abbrechen
+              </Button>
+              <Button
+                size="sm"
+                color="danger"
+                variant="solid"
+                loading={deleteSendung.isPending}
+                onClick={handleDeleteSendung}
+              >
+                Ja, löschen
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </SlideOver>
   );
 }

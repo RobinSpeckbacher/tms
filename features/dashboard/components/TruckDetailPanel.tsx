@@ -42,6 +42,14 @@ function barColor(p: number) {
   return "#22c55e";
 }
 
+function hasText(value: string | null | undefined): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasFiniteNumber(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 /* ── Props ────────────────────────────────────────────────────────── */
 interface TruckDetailPanelProps {
   truck: Truck | null;
@@ -65,7 +73,7 @@ export default function TruckDetailPanel({
   onUnassignSendung,
   onDropSendung,
 }: TruckDetailPanelProps) {
-  const accent = truck?.farbe || "#155dfc";
+  const accent = hasText(truck?.farbe) ? truck.farbe : "#155dfc";
 
   const capacity = useMemo(() => {
     let usedLdm = 0,
@@ -180,7 +188,7 @@ function TruckDetailPanelInner({
                   {truck.kennzeichen}
                 </h2>
                 <div className="flex items-center gap-2 mt-0.5">
-                  {truck.fahrer && (
+                  {hasText(truck.fahrer) && (
                     <span className="flex items-center gap-1 text-xs text-slate-500">
                       <User className="h-3 w-3" />
                       {truck.fahrer}
@@ -196,7 +204,9 @@ function TruckDetailPanelInner({
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <button
-                onClick={handleGenerateCmr}
+                onClick={() => {
+                  void handleGenerateCmr();
+                }}
                 disabled={cmrLoading}
                 className="p-1.5 rounded-md text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50"
                 title="CMR Frachtbrief generieren"
@@ -228,7 +238,7 @@ function TruckDetailPanelInner({
             <span className="flex items-center gap-1">
               <CalendarDays className="h-3.5 w-3.5" />
               {truck.ladedatum}
-              {truck.ladezeit && ` ${truck.ladezeit}`}
+              {hasText(truck.ladezeit) ? ` ${truck.ladezeit}` : ""}
             </span>
             <span
               className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
@@ -303,8 +313,8 @@ function TruckDetailPanelInner({
             ) : (
               <div className="space-y-2">
                 {sendungen.map((s) => {
-                  const pe = s.packungseinheit
-                    ? PE_SHORT[s.packungseinheit]
+                  const pe = hasText(s.packungseinheit)
+                    ? (PE_SHORT[s.packungseinheit] ?? null)
                     : null;
                   return (
                     <div
@@ -350,15 +360,21 @@ function TruckDetailPanelInner({
                         <CalendarDays className="h-3 w-3" />
                         <span>
                           {s.ladedatum}
-                          {s.ladezeit ? ` ${s.ladezeit.slice(0, 5)}` : ""}
+                          {hasText(s.ladezeit)
+                            ? ` ${s.ladezeit.slice(0, 5)}`
+                            : ""}
                           {" – "}
                           {s.entladedatum}
-                          {s.entladezeit ? ` ${s.entladezeit.slice(0, 5)}` : ""}
+                          {hasText(s.entladezeit)
+                            ? ` ${s.entladezeit.slice(0, 5)}`
+                            : ""}
                         </span>
                       </div>
 
                       {/* Row 4: Metrics */}
-                      {(s.gewicht || s.anzahl || s.lademeter) && (
+                      {(s.gewicht != null ||
+                        s.anzahl != null ||
+                        s.lademeter != null) && (
                         <div className="mt-2 flex items-center gap-2 flex-wrap">
                           {s.gewicht != null && (
                             <span className="inline-flex items-center gap-1 rounded-md bg-slate-50 px-2 py-0.5 text-[11px] text-slate-500 font-medium">
@@ -368,7 +384,7 @@ function TruckDetailPanelInner({
                                 : `${s.gewicht}kg`}
                             </span>
                           )}
-                          {s.anzahl != null && pe && (
+                          {s.anzahl != null && hasText(pe) && (
                             <span className="inline-flex items-center gap-1 rounded-md bg-slate-50 px-2 py-0.5 text-[11px] text-slate-500 font-medium">
                               <Layers className="h-3 w-3" />
                               {s.anzahl} {pe}
@@ -420,7 +436,7 @@ function RouteSection({
   if (sendungen.length === 0) return null;
 
   const autoGesamtpreis =
-    preis_pro_km && route?.totalKm
+    hasFiniteNumber(preis_pro_km) && hasFiniteNumber(route?.totalKm)
       ? (preis_pro_km * route.totalKm).toFixed(2)
       : null;
 
@@ -497,7 +513,7 @@ function RouteSection({
           )}
 
           {/* Auto Gesamtpreis from preis_pro_km */}
-          {autoGesamtpreis && (
+          {autoGesamtpreis != null && (
             <div className="flex items-center justify-between rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs">
               <span className="text-slate-500">
                 {route.totalKm} km × {preis_pro_km} €/km

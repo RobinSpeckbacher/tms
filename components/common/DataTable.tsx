@@ -18,6 +18,7 @@ interface DataTableProps<T> {
   columns: ColumnDef<T, unknown>[];
   data: T[];
   onRowClick?: (row: T) => void;
+  getRowClassName?: (row: T) => string;
   searchPlaceholder?: string;
   emptyMessage?: string;
   noResultsMessage?: string;
@@ -28,6 +29,7 @@ export function DataTable<T>({
   columns,
   data,
   onRowClick,
+  getRowClassName,
   searchPlaceholder = "Suchen…",
   emptyMessage = "Keine Daten vorhanden",
   noResultsMessage = "Keine Treffer für diese Suche",
@@ -123,6 +125,7 @@ export function DataTable<T>({
                   className={cn(
                     "hover:bg-[#155dfc]/3 transition-colors",
                     onRowClick && "cursor-pointer",
+                    getRowClassName?.(row.original),
                   )}
                 >
                   {row.getVisibleCells().map((cell) => (
