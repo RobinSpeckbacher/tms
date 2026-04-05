@@ -234,15 +234,21 @@ function buildCmrInputs(truck: Truck, sendungen: SendungRow[]) {
     totalLdm += s.lademeter ?? 0;
   }
 
+  const hasText = (value: string | null | undefined) =>
+    typeof value === "string" && value.trim().length > 0;
+
   const goodsLines = sendungen.map((s) => {
-    const pe = s.packungseinheit
-      ? (PE_LABELS[s.packungseinheit] ?? s.packungseinheit)
+    const packungseinheit = hasText(s.packungseinheit)
+      ? s.packungseinheit
+      : null;
+    const pe = packungseinheit !== null
+      ? (PE_LABELS[packungseinheit] ?? packungseinheit)
       : "";
     const parts = [
       s.referenz.padEnd(20),
-      s.lade_ort ?? "",
+      s.lade_ort,
       " → ",
-      s.entlade_ort ?? "",
+      s.entlade_ort,
       "  |  ",
       s.anzahl != null ? `${s.anzahl} ${pe}` : "",
       "  |  ",
@@ -274,16 +280,24 @@ function buildCmrInputs(truck: Truck, sendungen: SendungRow[]) {
   const now = new Date();
   const dateStr = `${now.getDate().toString().padStart(2, "0")}.${(now.getMonth() + 1).toString().padStart(2, "0")}.${now.getFullYear()}`;
 
+  const fahrerName = hasText(truck.fahrer) ? truck.fahrer : "–";
+  const fahrerTelefon = hasText(truck.telefon_fahrer)
+    ? `Tel: ${truck.telefon_fahrer}`
+    : "";
   const fahrLines = [
-    truck.fahrer || "–",
-    truck.telefon_fahrer ? `Tel: ${truck.telefon_fahrer}` : "",
+    fahrerName,
+    fahrerTelefon,
   ].filter(Boolean);
 
+  const fraechterName = hasText(truck.fraechter?.name)
+    ? truck.fraechter?.name ?? "–"
+    : "–";
+  const fraechterNummer = hasText(truck.fraechter?.kundennummer)
+    ? `Kd-Nr: ${truck.fraechter?.kundennummer ?? ""}`
+    : "";
   const fraechterLines = [
-    truck.fraechter?.name || "–",
-    truck.fraechter?.kundennummer
-      ? `Kd-Nr: ${truck.fraechter.kundennummer}`
-      : "",
+    fraechterName,
+    fraechterNummer,
   ].filter(Boolean);
 
   const fmtKg =
@@ -316,13 +330,17 @@ function buildCmrInputs(truck: Truck, sendungen: SendungRow[]) {
     empfaenger: empfaengerText,
 
     label_3: "3  Auslieferungsort (Place of delivery)",
-    auslieferungsort: entladeOrte.join("\n") || "–",
+    auslieferungsort: entladeOrte.length > 0 ? entladeOrte.join("\n") : "–",
 
     label_4: "4  Übernahmeort und -datum (Place/date of taking over)",
-    uebernahmeort: `${ladeOrte[0] || "–"}\n${truck.ladedatum}${truck.ladezeit ? ` ${truck.ladezeit}` : ""}`,
+    uebernahmeort: `${ladeOrte.length > 0 ? ladeOrte[0] : "–"}\n${truck.ladedatum}${hasText(truck.ladezeit) ? ` ${truck.ladezeit}` : ""}`,
 
     label_cmr_nr: "CMR Nr.",
-    cmr_nr: truck.interne_ref || truck.kunden_ref || "–",
+    cmr_nr: hasText(truck.interne_ref)
+      ? truck.interne_ref
+      : hasText(truck.kunden_ref)
+        ? truck.kunden_ref
+        : "–",
 
     label_datum: "Datum",
     datum: dateStr,
@@ -331,7 +349,7 @@ function buildCmrInputs(truck: Truck, sendungen: SendungRow[]) {
     fraechter: fraechterLines.join("\n"),
 
     label_fahrzeug: "Fahrzeug (Vehicle)",
-    fahrzeug: `${truck.kennzeichen}\nRef: ${truck.interne_ref}${truck.kunden_ref ? `\nKd-Ref: ${truck.kunden_ref}` : ""}`,
+    fahrzeug: `${truck.kennzeichen}\nRef: ${truck.interne_ref}${hasText(truck.kunden_ref) ? `\nKd-Ref: ${truck.kunden_ref}` : ""}`,
 
     label_fahrer: "Fahrer (Driver)",
     fahrer_info: fahrLines.join("\n"),
@@ -340,7 +358,7 @@ function buildCmrInputs(truck: Truck, sendungen: SendungRow[]) {
       "6  Warenbezeichnung / Art der Verpackung (Description of goods)",
     goods_header:
       "Referenz                    Ladeort → Entladeort            |  Menge              |  Gewicht          |  Lademeter",
-    goods_data: goodsLines.join("\n") || "Keine Sendungen",
+    goods_data: goodsLines.length > 0 ? goodsLines.join("\n") : "Keine Sendungen",
 
     label_totals: "Gesamt",
     totals: totalStr,
@@ -349,7 +367,7 @@ function buildCmrInputs(truck: Truck, sendungen: SendungRow[]) {
     anweisungen: "",
 
     label_ausstellung: "21  Ausgestellt in (Established in)",
-    ausstellungsort: ladeOrte[0] || "–",
+    ausstellungsort: ladeOrte.length > 0 ? ladeOrte[0] : "–",
     label_ausstellungsdatum: "Datum (Date)",
     ausstellungsdatum: dateStr,
 

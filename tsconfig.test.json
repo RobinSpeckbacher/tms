@@ -2,8 +2,8 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "ignoreDeprecations": "6.0",
-    "module": "CommonJS",
-    "moduleResolution": "node16",
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
     "types": ["jest", "node"]
   },
   "include": ["__tests__/**/*.ts", "lib/**/*.ts", "hooks/**/*.ts"]

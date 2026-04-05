@@ -5,16 +5,19 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
+  const hasDescription =
+    typeof description === "string" && description.trim().length > 0;
+
   return (
     <div className="mb-6 flex items-start justify-between gap-4">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
-        {description && (
+        {hasDescription && (
           <p className="mt-1 text-sm text-slate-500">{description}</p>
         )}
       </div>
-      {actions && (
-        <div className="flex items-center gap-3 flex-shrink-0">{actions}</div>
+      {actions != null && (
+        <div className="flex items-center gap-3 shrink-0">{actions}</div>
       )}
     </div>
   );

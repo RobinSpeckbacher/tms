@@ -24,7 +24,7 @@ export default function SignInPage() {
   async function finalize() {
     const { error } = await signIn.finalize({
       navigate: ({ session, decorateUrl }) => {
-        if (session?.currentTask) return;
+        if (session.currentTask) return;
         const url = decorateUrl("/dashboard");
         if (url.startsWith("http")) {
           window.location.href = url;
@@ -104,7 +104,7 @@ export default function SignInPage() {
           </p>
         </div>
 
-        <form onSubmit={handleMfa} className="space-y-5">
+        <form onSubmit={(e) => void handleMfa(e)} className="space-y-5">
           <div>
             <label className="block text-[10px] font-semibold text-[#57688e] uppercase tracking-widest mb-1.5">
               Verification Code
@@ -168,7 +168,7 @@ export default function SignInPage() {
         </p>
       </div>
 
-      <form onSubmit={handleLogin} className="space-y-5">
+      <form onSubmit={(e) => void handleLogin(e)} className="space-y-5">
         {/* Email */}
         <div>
           <label className="block text-[10px] font-semibold text-[#57688e] uppercase tracking-widest mb-1.5">

@@ -87,8 +87,8 @@ export function useCreateUnternehmen() {
       if (error) throw error;
       return data as Unternehmen;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["unternehmen"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["unternehmen"] });
     },
   });
 }

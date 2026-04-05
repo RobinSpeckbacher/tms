@@ -165,9 +165,11 @@ export function useCreateTruckVorlage() {
 
       return createdTruckVorlage as TruckVorlageRow;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["truck_vorlagen"] });
-      queryClient.invalidateQueries({ queryKey: ["vorlagen"] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["truck_vorlagen"] }),
+        queryClient.invalidateQueries({ queryKey: ["vorlagen"] }),
+      ]);
     },
   });
 }
@@ -217,9 +219,11 @@ export function useUpdateTruckVorlage() {
 
       return updatedTruckVorlage as TruckVorlageRow;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["truck_vorlagen"] });
-      queryClient.invalidateQueries({ queryKey: ["vorlagen"] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["truck_vorlagen"] }),
+        queryClient.invalidateQueries({ queryKey: ["vorlagen"] }),
+      ]);
     },
   });
 }
@@ -239,9 +243,11 @@ export function useDeleteTruckVorlage() {
         .eq("id", truckVorlageId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["truck_vorlagen"] });
-      queryClient.invalidateQueries({ queryKey: ["vorlagen"] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["truck_vorlagen"] }),
+        queryClient.invalidateQueries({ queryKey: ["vorlagen"] }),
+      ]);
     },
   });
 }
@@ -266,8 +272,9 @@ export function useToggleTruckVorlageActive() {
         .eq("id", truckVorlageId);
       if (error) throw error;
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["truck_vorlagen"] }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["truck_vorlagen"] });
+    },
   });
 }
 
@@ -450,12 +457,14 @@ export function useGenerateRecurringTrucksWithShipments() {
 
       return { trucksCreated, shipmentsCreated };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sendungen"] });
-      queryClient.invalidateQueries({ queryKey: ["trucks"] });
-      queryClient.invalidateQueries({ queryKey: ["truck_sendungen"] });
-      queryClient.invalidateQueries({ queryKey: ["truck_vorlagen"] });
-      queryClient.invalidateQueries({ queryKey: ["vorlagen"] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["sendungen"] }),
+        queryClient.invalidateQueries({ queryKey: ["trucks"] }),
+        queryClient.invalidateQueries({ queryKey: ["truck_sendungen"] }),
+        queryClient.invalidateQueries({ queryKey: ["truck_vorlagen"] }),
+        queryClient.invalidateQueries({ queryKey: ["vorlagen"] }),
+      ]);
     },
   });
 }

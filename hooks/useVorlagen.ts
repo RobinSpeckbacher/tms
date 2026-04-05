@@ -2,11 +2,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/nextjs";
 import { createClient, createAuthClient } from "@/lib/supabase/client";
 import dayjs from "dayjs";
-import { calculateExpectedDates as _calculateExpectedDates, type RecurrenceType as _RecurrenceType } from "@/lib/recurrence";
+import {
+  calculateExpectedDates as _calculateExpectedDates,
+  type RecurrenceType as _RecurrenceType,
+} from "@/lib/recurrence";
 
 // Re-export from the pure utility module so existing imports keep working
 export type RecurrenceType = _RecurrenceType;
 export { _calculateExpectedDates as calculateExpectedDates };
+const calculateExpectedDates = _calculateExpectedDates;
 
 export interface VorlageRow {
   id: string;
@@ -112,7 +116,9 @@ export function useCreateVorlage() {
       if (error) throw error;
       return data as VorlageRow;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vorlagen"] }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["vorlagen"] });
+    },
   });
 }
 
@@ -136,7 +142,9 @@ export function useUpdateVorlage() {
       if (error) throw error;
       return data as VorlageRow;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vorlagen"] }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["vorlagen"] });
+    },
   });
 }
 
@@ -154,7 +162,9 @@ export function useDeleteVorlage() {
         .eq("id", vorlageId);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vorlagen"] }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["vorlagen"] });
+    },
   });
 }
 
@@ -178,7 +188,9 @@ export function useToggleVorlageActive() {
         .eq("id", vorlageId);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vorlagen"] }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["vorlagen"] });
+    },
   });
 }
 
@@ -274,9 +286,11 @@ export function useGenerateRecurringSendungen() {
 
       return totalShipmentsCreated;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sendungen"] });
-      queryClient.invalidateQueries({ queryKey: ["vorlagen"] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["sendungen"] }),
+        queryClient.invalidateQueries({ queryKey: ["vorlagen"] }),
+      ]);
     },
   });
 }

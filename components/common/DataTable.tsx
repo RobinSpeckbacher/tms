@@ -146,7 +146,7 @@ export function DataTable<T>({
           {table
             .getFooterGroups()
             .some((fg) =>
-              fg.headers.some((h) => h.column.columnDef.footer),
+              fg.headers.some((h) => Boolean(h.column.columnDef.footer)),
             ) && (
             <tfoot>
               {table.getFooterGroups().map((footerGroup) => (

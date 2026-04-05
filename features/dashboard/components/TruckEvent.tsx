@@ -39,6 +39,8 @@ export default function TruckEvent({
   const truckId = ext.truckId as string;
   const truck = ext.truckData as Truck | undefined;
   const accent = (event.backgroundColor as string) || "#155dfc";
+  const hasDriver =
+    typeof truck?.fahrer === "string" && truck.fahrer.trim().length > 0;
 
   const capacity = useMemo(() => {
     let usedLdm = 0,
@@ -104,7 +106,7 @@ export default function TruckEvent({
         </div>
 
         {/* Row 2: Driver */}
-        {truck?.fahrer && (
+        {hasDriver && (
           <div className="flex items-center gap-1 text-[10px] text-slate-400">
             <User className="h-2.5 w-2.5 shrink-0" />
             <span className="truncate">{truck.fahrer}</span>

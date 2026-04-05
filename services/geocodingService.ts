@@ -39,6 +39,8 @@ async function rateLimitedFetch(url: string, init?: RequestInit): Promise<Respon
 // In-flight dedup: avoid parallel requests for the same location
 const inFlight = new Map<string, Promise<GeocodingResult | null>>();
 
+type NominatimItem = { lat: string; lon: string; display_name: string };
+
 /**
  * Geocode a location by postal code, city name, and country code.
  * Returns coordinates or null if not found.
@@ -94,18 +96,22 @@ async function geocodeLocationInner(
       return null;
     }
 
-    const data: { lat: string; lon: string; display_name: string }[] =
-      await res.json();
+    const data = (await res.json()) as NominatimItem[];
+    if (!Array.isArray(data) || data.length === 0) {
+      cache.set(key, null);
+      return null;
+    }
 
-    if (!data.length) {
+    const first = data[0];
+    if (first.lat.trim() === "" || first.lon.trim() === "" || first.display_name.trim() === "") {
       cache.set(key, null);
       return null;
     }
 
     const result: GeocodingResult = {
-      lat: parseFloat(data[0].lat),
-      lon: parseFloat(data[0].lon),
-      displayName: data[0].display_name,
+      lat: parseFloat(first.lat),
+      lon: parseFloat(first.lon),
+      displayName: first.display_name,
     };
     cache.set(key, result);
     return result;

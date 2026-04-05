@@ -21,18 +21,26 @@ export function useDistance(
   from: LocationInput | null,
   to: LocationInput | null,
 ) {
+  const hasText = (value: string | null | undefined) =>
+    typeof value === "string" && value.trim().length > 0;
+
   const enabled =
-    !!from?.plz && !!from?.ort && !!to?.plz && !!to?.ort;
+    from !== null &&
+    to !== null &&
+    hasText(from.plz) &&
+    hasText(from.ort) &&
+    hasText(to.plz) &&
+    hasText(to.ort);
 
   const { data, isLoading, error } = useQuery<DistanceResult | null>({
     queryKey: [
       "distance",
-      from?.plz,
-      from?.ort,
-      from?.land,
-      to?.plz,
-      to?.ort,
-      to?.land,
+      from?.plz ?? "",
+      from?.ort ?? "",
+      from?.land ?? "",
+      to?.plz ?? "",
+      to?.ort ?? "",
+      to?.land ?? "",
     ],
     queryFn: () => calculateDistance(from!, to!),
     enabled,

@@ -2,12 +2,7 @@
 
 import { useRef, useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import dayjs from "dayjs";
 import {
-  MapPin,
-  CalendarDays,
-  Weight,
-  Layers,
   FileText,
   Upload,
   Trash2,
@@ -15,13 +10,18 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
-  Building2,
-  Truck,
-  Euro,
 } from "lucide-react";
 import SlideOver from "@/components/common/SlideOver";
 import Image from "next/image";
 import type { EnrichedSendung } from "./ShipmentsTable";
+import {
+  formatIsoDate,
+  hasTextValue,
+  SendungDetailSectionHeader,
+  sendungStatusColorMap,
+  sendungStatusOptions,
+} from "./sendung-detail-modal/SendungDetailPresentation";
+import { SendungDetailInfoSections } from "./sendung-detail-modal/SendungDetailInfoSections";
 import { useUploadCmr, useDeleteCmr, useGetCmrUrl } from "@/hooks/useCmr";
 import { useDeleteSendung, useUpdateSendung } from "@/hooks/useSendungen";
 import { useDistance } from "@/hooks/useDistance";
@@ -32,102 +32,6 @@ import Option from "@mui/joy/Option";
 import Typography from "@mui/joy/Typography";
 import Chip from "@mui/joy/Chip";
 import CircularProgress from "@mui/joy/CircularProgress";
-
-/* ── Helpers ─────────────────────────────────────────────────────── */
-function formatDate(iso: string | null) {
-  const normalizedIso = typeof iso === "string" ? iso.trim() : null;
-  if (normalizedIso === null || normalizedIso === "") return "—";
-  return dayjs(normalizedIso).format("DD.MM.YYYY");
-}
-
-function formatDateTime(date: string | null, time: string | null) {
-  const normalizedDate = typeof date === "string" ? date.trim() : null;
-  if (normalizedDate === null || normalizedDate === "") return "—";
-
-  const d = dayjs(normalizedDate).format("DD.MM.YYYY");
-  const normalizedTime = typeof time === "string" ? time.trim() : null;
-  if (normalizedTime === null || normalizedTime === "") return d;
-
-  return `${d} ${normalizedTime.slice(0, 5)}`;
-}
-
-function hasText(value: string | null | undefined): value is string {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function eur(value: number | null | undefined) {
-  if (value == null) return "—";
-  return value.toLocaleString("de-DE", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 2,
-  });
-}
-
-function formatWeight(kg: number | null) {
-  if (kg == null) return "—";
-  return kg >= 1000
-    ? `${(kg / 1000).toFixed(kg % 1000 === 0 ? 0 : 1)} t`
-    : `${kg} kg`;
-}
-
-const PE_LABELS: Record<string, string> = {
-  europalette: "Europalette",
-  industriepalette: "Industriepalette",
-  gitterbox: "Gitterbox",
-  colli: "Colli",
-  sonstige: "Sonstige",
-};
-
-const STATUS_OPTIONS = [
-  { value: "offen", label: "Offen" },
-  { value: "zugewiesen", label: "Zugewiesen" },
-  { value: "unterwegs", label: "Unterwegs" },
-  { value: "abgeschlossen", label: "Abgeschlossen" },
-  { value: "storniert", label: "Storniert" },
-];
-
-const STATUS_COLORS: Record<string, string> = {
-  offen: "warning",
-  zugewiesen: "primary",
-  unterwegs: "primary",
-  abgeschlossen: "success",
-  storniert: "danger",
-};
-
-/* ── Info row component ──────────────────────────────────────────── */
-function InfoRow({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string;
-  value: React.ReactNode;
-  icon?: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <div className="flex items-start gap-2 py-1.5">
-      {Icon && <Icon className="h-3.5 w-3.5 mt-0.5 text-[#57688e] shrink-0" />}
-      <div className="min-w-0 flex-1">
-        <p className="text-[0.65rem] text-[#57688e] uppercase tracking-wide font-medium">
-          {label}
-        </p>
-        <p className="text-xs text-[#0f172b] mt-0.5">{value}</p>
-      </div>
-    </div>
-  );
-}
-
-/* ── Section header ──────────────────────────────────────────────── */
-function Section({ title }: { title: string }) {
-  return (
-    <div className="border-b border-[#0f172b]/10 pb-1 mb-2 mt-4 first:mt-0">
-      <p className="text-[0.7rem] font-semibold text-[#0f172b] uppercase tracking-wide">
-        {title}
-      </p>
-    </div>
-  );
-}
 
 /* ── Main Component ──────────────────────────────────────────────── */
 interface SendungDetailModalProps {
@@ -164,14 +68,14 @@ export default function SendungDetailModal({
 
   // Distance between Ladeort ↔ Entladeort
   const { distance, isLoading: distanceLoading } = useDistance(
-    hasText(ladePlz) && hasText(ladeOrt)
+    hasTextValue(ladePlz) && hasTextValue(ladeOrt)
       ? {
           plz: ladePlz,
           ort: ladeOrt,
           land: ladeLand,
         }
       : null,
-    hasText(entladePlz) && hasText(entladeOrt)
+    hasTextValue(entladePlz) && hasTextValue(entladeOrt)
       ? {
           plz: entladePlz,
           ort: entladeOrt,
@@ -184,12 +88,12 @@ export default function SendungDetailModal({
   const { data: previewUrl, isLoading: previewLoading } = useQuery({
     queryKey: ["cmr-preview", sendung?.id, sendung?.cmr_path],
     queryFn: () =>
-      hasText(cmrPath) ? getCmrUrl(cmrPath) : Promise.resolve(null),
-    enabled: hasText(cmrPath),
+      hasTextValue(cmrPath) ? getCmrUrl(cmrPath) : Promise.resolve(null),
+    enabled: hasTextValue(cmrPath),
   });
 
   const cmrFileName = sendung?.cmr_file_name;
-  const isPdf = hasText(cmrFileName)
+  const isPdf = hasTextValue(cmrFileName)
     ? cmrFileName.toLowerCase().endsWith(".pdf")
     : false;
 
@@ -231,7 +135,7 @@ export default function SendungDetailModal({
   const handleOpenCmr = useCallback(async () => {
     if (!sendung) return;
     const url = await getCmrUrl(sendung.id);
-    if (hasText(url)) {
+    if (hasTextValue(url)) {
       window.open(url, "_blank", "noopener,noreferrer");
     } else {
       toast.error("Datei nicht gefunden");
@@ -241,7 +145,7 @@ export default function SendungDetailModal({
   const handleStatusChange = useCallback(
     (_e: unknown, value: string | null) => {
       if (!sendung) return;
-      if (!hasText(value)) return;
+      if (!hasTextValue(value)) return;
 
       updateSendung.mutate(
         { id: sendung.id, status: value },
@@ -273,11 +177,7 @@ export default function SendungDetailModal({
 
   if (!sendung) return null;
 
-  const hasCmr = hasText(sendung.cmr_path);
-  const marge =
-    sendung.verkaufspreis != null && sendung.einkaufspreis != null
-      ? sendung.verkaufspreis - sendung.einkaufspreis
-      : null;
+  const hasCmr = hasTextValue(sendung.cmr_path);
 
   const actions = (
     <>
@@ -335,7 +235,7 @@ export default function SendungDetailModal({
           size="sm"
           variant="soft"
           color={
-            STATUS_COLORS[sendung.status] as
+            sendungStatusColorMap[sendung.status] as
               | "warning"
               | "primary"
               | "success"
@@ -359,7 +259,7 @@ export default function SendungDetailModal({
       </div>
 
       {/* ── CMR Document Section ─────────────────────────────────── */}
-      <Section title="CMR Dokument" />
+      <SendungDetailSectionHeader title="CMR Dokument" />
       <div className="rounded-lg border border-[#0f172b]/10 bg-[#f8f9fb] p-3">
         {hasCmr ? (
           <div className="flex items-center gap-3">
@@ -371,7 +271,7 @@ export default function SendungDetailModal({
                 {sendung.cmr_file_name ?? "CMR Dokument"}
               </p>
               <p className="text-[0.65rem] text-[#57688e]">
-                Hochgeladen am {formatDate(sendung.cmr_uploaded_at)}
+                Hochgeladen am {formatIsoDate(sendung.cmr_uploaded_at)}
               </p>
             </div>
             <div className="flex items-center gap-1">
@@ -479,7 +379,7 @@ export default function SendungDetailModal({
               <div className="flex items-center justify-center py-8">
                 <CircularProgress size="sm" />
               </div>
-            ) : hasText(previewUrl) ? (
+            ) : hasTextValue(previewUrl) ? (
               <div className="rounded-md overflow-hidden border border-[#0f172b]/10 bg-white">
                 {isPdf ? (
                   <iframe
@@ -509,7 +409,7 @@ export default function SendungDetailModal({
       </div>
 
       {/* ── Status Management ────────────────────────────────────── */}
-      <Section title="Status" />
+      <SendungDetailSectionHeader title="Status" />
       <div className="flex items-center gap-2">
         <Typography
           level="body-xs"
@@ -527,7 +427,7 @@ export default function SendungDetailModal({
             fontSize: "0.75rem",
           }}
         >
-          {STATUS_OPTIONS.map((o) => (
+          {sendungStatusOptions.map((o) => (
             <Option key={o.value} value={o.value}>
               {o.label}
             </Option>
@@ -535,160 +435,11 @@ export default function SendungDetailModal({
         </Select>
       </div>
 
-      {/* ── Route ────────────────────────────────────────────────── */}
-      <Section title="Route" />
-      <div className="grid grid-cols-2 gap-x-4">
-        <div>
-          <div className="flex items-center gap-1.5 mb-1">
-            <MapPin className="h-3 w-3 text-green-500" />
-            <p className="text-[0.65rem] font-semibold text-[#57688e] uppercase tracking-wide">
-              Ladeort
-            </p>
-          </div>
-          <p className="text-xs font-medium text-[#0f172b]">
-            {sendung.lade_ort}
-          </p>
-          <p className="text-[0.65rem] text-[#57688e]">
-            {sendung.lade_plz} {sendung.lade_land}
-          </p>
-          {hasText(sendung.lade_adresse) && (
-            <p className="text-[0.65rem] text-[#57688e]">
-              {sendung.lade_adresse}
-            </p>
-          )}
-        </div>
-        <div>
-          <div className="flex items-center gap-1.5 mb-1">
-            <MapPin className="h-3 w-3 text-red-500" />
-            <p className="text-[0.65rem] font-semibold text-[#57688e] uppercase tracking-wide">
-              Entladeort
-            </p>
-          </div>
-          <p className="text-xs font-medium text-[#0f172b]">
-            {sendung.entlade_ort}
-          </p>
-          <p className="text-[0.65rem] text-[#57688e]">
-            {sendung.entlade_plz} {sendung.entlade_land}
-          </p>
-          {hasText(sendung.entlade_adresse) && (
-            <p className="text-[0.65rem] text-[#57688e]">
-              {sendung.entlade_adresse}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Distance indicator */}
-      {(distance != null || distanceLoading === true) && (
-        <div className="mt-2 flex items-center gap-2 rounded-md bg-[#f1f5f9] px-3 py-1.5">
-          <Truck className="h-3.5 w-3.5 text-[#155dfc] shrink-0" />
-          {distanceLoading === true ? (
-            <span className="text-[0.7rem] text-[#57688e]">
-              Entfernung wird berechnet…
-            </span>
-          ) : distance != null ? (
-            <span className="text-[0.7rem] text-[#0f172b] font-medium">
-              {distance.distanceFormatted} &middot; {distance.durationFormatted}{" "}
-              Fahrzeit
-            </span>
-          ) : null}
-        </div>
-      )}
-
-      {/* ── Zeitfenster ──────────────────────────────────────────── */}
-      <Section title="Zeitfenster" />
-      <div className="grid grid-cols-2 gap-x-4">
-        <InfoRow
-          icon={CalendarDays}
-          label="Beladung"
-          value={formatDateTime(sendung.ladedatum, sendung.ladezeit)}
-        />
-        <InfoRow
-          icon={CalendarDays}
-          label="Entladung"
-          value={formatDateTime(sendung.entladedatum, sendung.entladezeit)}
-        />
-      </div>
-
-      {/* ── Ladung ───────────────────────────────────────────────── */}
-      <Section title="Ladung" />
-      <div className="grid grid-cols-3 gap-x-4">
-        <InfoRow
-          icon={Weight}
-          label="Gewicht"
-          value={formatWeight(sendung.gewicht)}
-        />
-        <InfoRow
-          icon={Layers}
-          label="Packstücke"
-          value={
-            sendung.anzahl != null && hasText(sendung.packungseinheit)
-              ? `${sendung.anzahl} ${PE_LABELS[sendung.packungseinheit] ?? sendung.packungseinheit}`
-              : "—"
-          }
-        />
-        <InfoRow
-          label="Lademeter"
-          value={sendung.lademeter != null ? `${sendung.lademeter} ldm` : "—"}
-        />
-      </div>
-
-      {/* ── Beteiligte ───────────────────────────────────────────── */}
-      <Section title="Beteiligte" />
-      <div className="grid grid-cols-2 gap-x-4">
-        <InfoRow
-          icon={Building2}
-          label="Kunde"
-          value={sendung.kunde?.name ?? "—"}
-        />
-        <InfoRow
-          icon={Truck}
-          label="Frächter"
-          value={sendung.fraechter_name ?? "—"}
-        />
-      </div>
-
-      {/* ── LKW Details ─────────────────────────────────────────── */}
-      <Section title="LKW Details" />
-      <div className="grid grid-cols-2 gap-x-4">
-        <InfoRow
-          icon={Truck}
-          label="Kennzeichen"
-          value={sendung.truck_kennzeichen ?? "—"}
-        />
-        <InfoRow label="Interne Ref" value={sendung.truck_interne_ref ?? "—"} />
-        <InfoRow label="Fahrer" value={sendung.truck_fahrer ?? "—"} />
-        <InfoRow
-          label="Telefon Fahrer"
-          value={sendung.truck_telefon_fahrer ?? "—"}
-        />
-        <InfoRow label="Truck Status" value={sendung.truck_status ?? "—"} />
-      </div>
-
-      {/* ── Finanzen ─────────────────────────────────────────────── */}
-      <Section title="Finanzen" />
-      <div className="grid grid-cols-3 gap-x-4">
-        <InfoRow icon={Euro} label="VK" value={eur(sendung.verkaufspreis)} />
-        <InfoRow label="EK" value={eur(sendung.einkaufspreis)} />
-        <InfoRow
-          label="Marge"
-          value={
-            marge != null ? (
-              <span
-                className={
-                  marge >= 0
-                    ? "text-emerald-600 font-medium"
-                    : "text-red-600 font-medium"
-                }
-              >
-                {eur(marge)}
-              </span>
-            ) : (
-              "—"
-            )
-          }
-        />
-      </div>
+      <SendungDetailInfoSections
+        sendung={sendung}
+        distance={distance}
+        distanceLoading={distanceLoading}
+      />
 
       {confirmDeleteOpen && (
         <div

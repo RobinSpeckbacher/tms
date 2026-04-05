@@ -61,7 +61,10 @@ function useSupabase() {
   const { getToken } = useAuth();
   return async () => {
     const token = await getToken();
-    return token ? createAuthClient(token) : createClient();
+    if (typeof token === "string" && token.trim().length > 0) {
+      return createAuthClient(token);
+    }
+    return createClient();
   };
 }
 
@@ -75,9 +78,15 @@ export function useNextTruckRef() {
     refetchOnMount: "always",
     queryFn: async () => {
       const supabase = await getSupabase();
-      const { data, error } = await supabase.rpc("next_truck_interne_ref");
-      if (error) throw error;
-      return data as string;
+      const { data, error } = (await supabase.rpc("next_truck_interne_ref")) as {
+        data: string | null;
+        error: unknown;
+      };
+      if (error != null) throw error;
+      if (typeof data !== "string" || data.trim().length === 0) {
+        throw new Error("Keine Referenz erhalten");
+      }
+      return data;
     },
   });
 }
@@ -90,14 +99,17 @@ export function useTrucks() {
     queryKey: ["trucks"],
     queryFn: async () => {
       const supabase = await getSupabase();
-      const { data, error } = await supabase
+      const { data, error } = (await supabase
         .from("trucks")
         .select("*, fraechter:unternehmen!fraechter_id(id, name, kundennummer)")
         .is("deleted_at", null)
-        .order("ladedatum", { ascending: true });
+        .order("ladedatum", { ascending: true })) as {
+        data: Truck[] | null;
+        error: unknown;
+      };
 
-      if (error) throw error;
-      return data;
+      if (error != null) throw error;
+      return data ?? [];
     },
   });
 }
@@ -114,20 +126,32 @@ export function useCreateTruck() {
       const supabase = await getSupabase();
 
       // Get next ref from server-side sequence (race-condition safe)
-      const { data: nextRef, error: refError } = await supabase.rpc("next_truck_interne_ref");
-      if (refError) throw refError;
+      const { data: nextRef, error: refError } = (await supabase.rpc(
+        "next_truck_interne_ref",
+      )) as {
+        data: string | null;
+        error: unknown;
+      };
+      if (refError != null) throw refError;
+      if (typeof nextRef !== "string" || nextRef.trim().length === 0) {
+        throw new Error("Keine Referenz erhalten");
+      }
 
-      const { data, error } = await supabase
+      const { data, error } = (await supabase
         .from("trucks")
         .insert({ ...input, interne_ref: nextRef as string })
         .select()
-        .single();
+        .single()) as {
+        data: Truck | null;
+        error: unknown;
+      };
 
-      if (error) throw error;
-      return data as Truck;
+      if (error != null) throw error;
+      if (!data) throw new Error("Truck konnte nicht erstellt werden");
+      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["trucks"] });
+      void queryClient.invalidateQueries({ queryKey: ["trucks"] });
     },
   });
 }
@@ -140,18 +164,22 @@ export function useUpdateTruck() {
   return useMutation({
     mutationFn: async ({ id, ...input }: Partial<TruckInput> & { id: string }) => {
       const supabase = await getSupabase();
-      const { data, error } = await supabase
+      const { data, error } = (await supabase
         .from("trucks")
         .update(input)
         .eq("id", id)
         .select("*, fraechter:unternehmen!fraechter_id(id, name, kundennummer)")
-        .single();
+        .single()) as {
+        data: Truck | null;
+        error: unknown;
+      };
 
-      if (error) throw error;
-      return data as Truck;
+      if (error != null) throw error;
+      if (!data) throw new Error("Truck konnte nicht aktualisiert werden");
+      return data;
     },
     onMutate: (variables) => {
-      queryClient.cancelQueries({ queryKey: ["trucks"] });
+      void queryClient.cancelQueries({ queryKey: ["trucks"] });
       const previous = queryClient.getQueryData<Truck[]>(["trucks"]);
 
       queryClient.setQueryData<Truck[]>(["trucks"], (old) =>
@@ -168,7 +196,7 @@ export function useUpdateTruck() {
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["trucks"] });
+      void queryClient.invalidateQueries({ queryKey: ["trucks"] });
     },
   });
 }
@@ -189,7 +217,7 @@ export function useDeleteTruck() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["trucks"] });
+      void queryClient.invalidateQueries({ queryKey: ["trucks"] });
     },
   });
 }

@@ -185,7 +185,9 @@ export default function UnternehmenAutocomplete({
             <Button
               size="sm"
               loading={createMutation.isPending}
-              onClick={handleCreate}
+              onClick={() => {
+                void handleCreate();
+              }}
               sx={{ bgcolor: "#155dfc", "&:hover": { bgcolor: "#1250d4" } }}
             >
               Erstellen

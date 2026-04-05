@@ -1,522 +1,26 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import dayjs, { type Dayjs } from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Package,
-  MapPin,
-  Weight,
-  Layers,
-  Ruler,
-  X,
-  Truck as TruckIcon,
-  User,
-  Route,
-  Calendar,
-  Plus,
-  Filter,
-  Check,
-  Clock,
-  AlertTriangle,
-} from "lucide-react";
+import { Weight, Ruler, Route, Clock } from "lucide-react";
 import type { Truck } from "@/hooks/useTrucks";
 import type { Relation } from "@/hooks/useRelationen";
 import type { SendungRow } from "@/hooks/useSendungen";
+import {
+  NewRelationInlineFormRow,
+  RelationDayCell,
+  VersandnetzLoadingGrid,
+} from "./versandnetz/VersandnetzSubcomponents";
+import {
+  VersandnetzHeader,
+  type ViewMode,
+} from "./versandnetz/VersandnetzHeader";
 
 dayjs.extend(isoWeek);
 
-/* ── Types ────────────────────────────────────────────────────────── */
-type ViewMode = "day" | "3day" | "week";
-
 /* ── Helpers ──────────────────────────────────────────────────────── */
 const DAY_LABELS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
-
-const PE_SHORT: Record<string, string> = {
-  europalette: "EP",
-  industriepalette: "IP",
-  gitterbox: "GB",
-  colli: "Colli",
-  sonstige: "Stk",
-};
-
-function formatTime(time: string | undefined | null): string {
-  if (time == null || time.trim() === "") return "";
-  return time.slice(0, 5);
-}
-
-const RELATION_COLORS = [
-  "#155dfc",
-  "#7c3aed",
-  "#0891b2",
-  "#059669",
-  "#d97706",
-  "#dc2626",
-  "#db2777",
-  "#4f46e5",
-  "#0d9488",
-  "#ca8a04",
-];
-
-const VIEW_LABELS: Record<ViewMode, string> = {
-  day: "Tag",
-  "3day": "3 Tage",
-  week: "Woche",
-};
-
-/* ── Capacity helpers ─────────────────────────────────────────────── */
-function pct(used: number, max: number) {
-  if (!max) return 0;
-  return Math.round((used / max) * 100);
-}
-
-function barColor(percent: number) {
-  if (percent >= 90) return "#ef4444";
-  if (percent >= 70) return "#f59e0b";
-  return "#22c55e";
-}
-
-/* ── Sendung chip (inside a truck card) ──────────────────────────── */
-function SendungChip({
-  sendung,
-  onUnassign,
-}: {
-  sendung: SendungRow;
-  onUnassign: () => void;
-}) {
-  const pe =
-    sendung.packungseinheit != null && sendung.packungseinheit.trim() !== ""
-      ? (PE_SHORT[sendung.packungseinheit] ?? null)
-      : null;
-
-  return (
-    <div
-      className="group/chip relative rounded bg-white/80 border border-slate-200/60
-                    p-1 text-[9px] transition-all hover:bg-white"
-    >
-      <div className="flex items-center gap-0.5">
-        <Package className="h-2.5 w-2.5 shrink-0 text-blue-500" />
-        <span className="font-semibold text-slate-700 truncate">
-          {sendung.referenz}
-        </span>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onUnassign();
-          }}
-          className="ml-auto shrink-0 p-0.5 rounded text-slate-300 opacity-0 group-hover/chip:opacity-100
-                     hover:bg-red-50 hover:text-red-500 transition-all"
-        >
-          <X className="h-2.5 w-2.5" />
-        </button>
-      </div>
-      <div className="mt-0.5 flex items-center gap-0.5 text-slate-500">
-        <MapPin className="h-2 w-2 text-emerald-500" />
-        <span className="truncate">{sendung.lade_ort}</span>
-        <span className="text-slate-300 mx-0.5">→</span>
-        <span className="truncate">{sendung.entlade_ort}</span>
-      </div>
-      {(sendung.gewicht != null ||
-        sendung.anzahl != null ||
-        sendung.lademeter != null) && (
-        <div className="mt-0.5 flex items-center gap-1 flex-wrap">
-          {sendung.gewicht != null && (
-            <span className="inline-flex items-center gap-0.5 text-[8px] text-slate-400">
-              <Weight className="h-2 w-2" />
-              {sendung.gewicht >= 1000
-                ? `${(sendung.gewicht / 1000).toFixed(1)}t`
-                : `${sendung.gewicht}kg`}
-            </span>
-          )}
-          {sendung.anzahl != null && pe != null && pe.trim() !== "" && (
-            <span className="inline-flex items-center gap-0.5 text-[8px] text-slate-400">
-              <Layers className="h-2 w-2" />
-              {sendung.anzahl} {pe}
-            </span>
-          )}
-          {sendung.lademeter != null && (
-            <span className="inline-flex items-center gap-0.5 text-[8px] text-slate-400">
-              <Ruler className="h-2 w-2" />
-              {sendung.lademeter} ldm
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── Truck card (calendar-event-style, inside a cell) ────────────── */
-function TruckCard({
-  truck,
-  sendungen,
-  onDropSendung,
-  onUnassignSendung,
-  onClick,
-}: {
-  truck: Truck;
-  sendungen: SendungRow[];
-  onDropSendung: (truckId: string, sendungId: string) => void;
-  onUnassignSendung: (sendungId: string) => void;
-  onClick?: () => void;
-}) {
-  const [isDragOver, setIsDragOver] = useState(false);
-  const dragCounterRef = useRef(0);
-  const accent = truck.farbe || "#155dfc";
-
-  const capacity = useMemo(() => {
-    let usedLdm = 0,
-      usedKg = 0,
-      usedPal = 0;
-    for (const s of sendungen) {
-      usedLdm += s.lademeter ?? 0;
-      usedKg += s.gewicht ?? 0;
-      usedPal += s.anzahl ?? 0;
-    }
-    const maxLdm = truck.lademeter ?? 0;
-    const maxKg = truck.max_gewicht ?? 0;
-    const maxPal = truck.max_paletten ?? 0;
-    const mainPct = Math.max(
-      pct(usedLdm, maxLdm),
-      pct(usedKg, maxKg),
-      pct(usedPal, maxPal),
-    );
-    return { mainPct };
-  }, [sendungen, truck]);
-
-  return (
-    <div
-      className={`group/truck relative rounded-md border overflow-hidden text-[10px] transition-all cursor-pointer
-        ${
-          isDragOver
-            ? "ring-2 ring-blue-400/50 border-blue-300"
-            : "border-slate-200/80 hover:border-slate-300 hover:shadow-sm"
-        }`}
-      style={{ borderLeftWidth: 3, borderLeftColor: accent }}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick?.();
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = "move";
-      }}
-      onDragEnter={(e) => {
-        e.preventDefault();
-        dragCounterRef.current++;
-        setIsDragOver(true);
-      }}
-      onDragLeave={() => {
-        dragCounterRef.current--;
-        if (dragCounterRef.current === 0) setIsDragOver(false);
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        dragCounterRef.current = 0;
-        setIsDragOver(false);
-        const sendungId = e.dataTransfer.getData("text/plain");
-        if (sendungId) onDropSendung(truck.id, sendungId);
-      }}
-    >
-      {/* Truck header */}
-      <div className="px-1.5 pt-1.5 pb-1 bg-slate-50/80">
-        <div className="flex items-center gap-1">
-          <TruckIcon className="h-3 w-3 shrink-0" style={{ color: accent }} />
-          <span className="font-bold text-slate-800 truncate">
-            {truck.kennzeichen}
-          </span>
-        </div>
-        {/* Time range */}
-        <div className="flex items-center gap-0.5 text-[9px] text-slate-400 mt-0.5">
-          <Clock className="h-2.5 w-2.5 shrink-0" />
-          <span>
-            {formatTime(truck.ladezeit) || "08:00"} –{" "}
-            {formatTime(truck.entladezeit) || "17:00"}
-          </span>
-        </div>
-        {truck.fahrer != null && truck.fahrer.trim() !== "" && (
-          <div className="flex items-center gap-0.5 text-[9px] text-slate-500 mt-0.5">
-            <User className="h-2.5 w-2.5 shrink-0" />
-            <span className="truncate">{truck.fahrer}</span>
-          </div>
-        )}
-        {truck.fraechter && (
-          <p className="text-[8px] text-slate-400 truncate mt-0.5 pl-3">
-            {truck.fraechter.name}
-          </p>
-        )}
-      </div>
-
-      {/* Capacity bar */}
-      {sendungen.length > 0 && capacity.mainPct > 0 && (
-        <div className="px-1.5 pb-1 flex items-center gap-1">
-          <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 px-1 py-0.5 text-[9px] font-semibold text-blue-600">
-            <Package className="h-2.5 w-2.5" />
-            {sendungen.length}
-          </span>
-          <div className="flex-1 h-1 rounded-full bg-slate-100 overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all"
-              style={{
-                width: `${Math.min(capacity.mainPct, 100)}%`,
-                backgroundColor: barColor(capacity.mainPct),
-              }}
-            />
-          </div>
-          <span
-            className="text-[8px] font-semibold tabular-nums"
-            style={{ color: barColor(capacity.mainPct) }}
-          >
-            {capacity.mainPct}%
-          </span>
-        </div>
-      )}
-
-      {/* Overload warning */}
-      {capacity.mainPct >= 100 && (
-        <div className="px-1.5 pb-1 flex items-center gap-0.5 text-[8px] text-red-600 font-medium">
-          <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
-          <span>Überladen ({capacity.mainPct}%)</span>
-        </div>
-      )}
-
-      {/* Sendungen list */}
-      {sendungen.length > 0 && (
-        <div className="px-1 pb-1 space-y-0.5">
-          {sendungen.map((s) => (
-            <SendungChip
-              key={s.id}
-              sendung={s}
-              onUnassign={() => onUnassignSendung(s.id)}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Drop hint overlay */}
-      {isDragOver && (
-        <div
-          className="absolute inset-0 flex items-center justify-center rounded-md
-                        bg-blue-50/80 border-2 border-dashed border-blue-400/50"
-        >
-          <span className="text-[9px] font-semibold text-blue-600">
-            ✚ Ablegen
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── Cell component (relation × day column) ──────────────────────── */
-function NetCell({
-  trucks,
-  truckSendungenMap,
-  isToday,
-  onDropSendung,
-  onUnassignSendung,
-  onTruckClick,
-}: {
-  trucks: Truck[];
-  truckSendungenMap: Map<string, SendungRow[]>;
-  isToday: boolean;
-  onDropSendung: (truckId: string, sendungId: string) => void;
-  onUnassignSendung: (sendungId: string) => void;
-  onTruckClick: (truckId: string) => void;
-}) {
-  return (
-    <td
-      className={`border-r border-b border-slate-200/70 p-1.5 align-top
-        ${isToday ? "bg-blue-50/40" : "bg-white"}`}
-    >
-      <div className="flex flex-col gap-1.5 min-h-12">
-        {trucks.map((truck) => (
-          <TruckCard
-            key={truck.id}
-            truck={truck}
-            sendungen={truckSendungenMap.get(truck.id) ?? []}
-            onDropSendung={onDropSendung}
-            onUnassignSendung={onUnassignSendung}
-            onClick={() => onTruckClick(truck.id)}
-          />
-        ))}
-      </div>
-    </td>
-  );
-}
-
-/* ── Inline form for creating a new Relation ─────────────────────── */
-function NewRelationRow({
-  onSave,
-  onCancel,
-}: {
-  onSave: (nummer: string, name: string, farbe: string) => void;
-  onCancel: () => void;
-}) {
-  const [nummer, setNummer] = useState("");
-  const [name, setName] = useState("");
-  const [farbe, setFarbe] = useState(
-    () => RELATION_COLORS[Math.floor(Math.random() * RELATION_COLORS.length)],
-  );
-
-  const handleSubmit = () => {
-    const trimNummer = nummer.trim();
-    const trimName = name.trim();
-    if (!trimNummer || !trimName) return;
-    onSave(trimNummer, trimName, farbe);
-  };
-
-  return (
-    <div className="flex items-center gap-2 px-2.5 py-2 border-b border-slate-200/70 bg-blue-50/40">
-      <div
-        className="w-1 h-8 rounded shrink-0"
-        style={{ backgroundColor: farbe }}
-      />
-      <input
-        autoFocus
-        placeholder="Nr."
-        value={nummer}
-        onChange={(e) => setNummer(e.target.value)}
-        className="w-16 rounded border border-slate-300 px-1.5 py-1 text-[11px] font-semibold
-                   text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
-      />
-      <input
-        placeholder="Name der Relation"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-        className="flex-1 rounded border border-slate-300 px-1.5 py-1 text-[11px]
-                   text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
-      />
-      <select
-        value={farbe}
-        onChange={(e) => setFarbe(e.target.value)}
-        className="rounded border border-slate-300 px-1 py-1 text-[11px] text-slate-600
-                   focus:outline-none focus:ring-1 focus:ring-blue-400"
-        style={{ color: farbe }}
-      >
-        {RELATION_COLORS.map((c) => (
-          <option key={c} value={c} style={{ color: c }}>
-            ■ {c}
-          </option>
-        ))}
-      </select>
-      <button
-        onClick={handleSubmit}
-        disabled={!nummer.trim() || !name.trim()}
-        className="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white
-                   hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-      >
-        Speichern
-      </button>
-      <button
-        onClick={onCancel}
-        className="rounded px-2 py-1 text-[11px] font-medium text-slate-500
-                   hover:bg-slate-100 transition-colors"
-      >
-        Abbrechen
-      </button>
-    </div>
-  );
-}
-
-/* ── Filter dropdown for relations ────────────────────────────────── */
-function RelationFilter({
-  relationen,
-  activeIds,
-  onToggle,
-}: {
-  relationen: Relation[];
-  activeIds: Set<string>;
-  onToggle: (id: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors
-          ${
-            activeIds.size < relationen.length
-              ? "bg-blue-50 text-blue-600 hover:bg-blue-100"
-              : "text-slate-500 hover:bg-slate-100"
-          }`}
-      >
-        <Filter className="h-3 w-3" />
-        Filter
-        {activeIds.size < relationen.length && (
-          <span className="ml-0.5 bg-blue-600 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center">
-            {activeIds.size}
-          </span>
-        )}
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-30 w-56 rounded-lg border border-slate-200 bg-white shadow-lg py-1">
-            {relationen.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => onToggle(r.id)}
-                className="flex items-center gap-2 w-full px-3 py-1.5 text-[11px] hover:bg-slate-50 transition-colors"
-              >
-                <div
-                  className="w-2.5 h-2.5 rounded-sm shrink-0"
-                  style={{ backgroundColor: r.farbe || "#155dfc" }}
-                />
-                <span className="flex-1 text-left text-slate-700 truncate">
-                  {r.nummer} {r.name}
-                </span>
-                {activeIds.has(r.id) && (
-                  <Check className="h-3 w-3 text-blue-600 shrink-0" />
-                )}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-/* ── Grid skeleton (loading state) ────────────────────────────────── */
-function GridSkeleton({ cols }: { cols: number }) {
-  return (
-    <div className="p-4 space-y-3">
-      {/* Header skeleton */}
-      <div className="flex gap-2">
-        <div className="w-48 h-10 rounded-md bg-slate-200/60 animate-pulse shrink-0" />
-        {Array.from({ length: cols }).map((_, i) => (
-          <div
-            key={i}
-            className="flex-1 h-10 rounded-md bg-slate-200/50 animate-pulse"
-          />
-        ))}
-        <div className="w-28 h-10 rounded-md bg-slate-200/40 animate-pulse shrink-0" />
-      </div>
-      {/* Row skeletons */}
-      {Array.from({ length: 5 }).map((_, r) => (
-        <div key={r} className="flex gap-2">
-          <div className="w-48 h-16 rounded-md bg-slate-100 animate-pulse shrink-0" />
-          {Array.from({ length: cols }).map((_, c) => (
-            <div
-              key={c}
-              className="flex-1 h-16 rounded-md bg-slate-50 animate-pulse"
-              style={{ animationDelay: `${(r * cols + c) * 75}ms` }}
-            />
-          ))}
-          <div className="w-28 h-16 rounded-md bg-slate-50 animate-pulse shrink-0" />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 /* ── Props ────────────────────────────────────────────────────────── */
 interface VersandnetzProps {
@@ -554,8 +58,8 @@ export default function Versandnetz({
     () =>
       new Set(
         relationen
-          .filter((r) => !disabledRelationIds.has(r.id))
-          .map((r) => r.id),
+          .filter((relation) => !disabledRelationIds.has(relation.id))
+          .map((relation) => relation.id),
       ),
     [relationen, disabledRelationIds],
   );
@@ -570,7 +74,7 @@ export default function Versandnetz({
   }, []);
 
   const filteredRelationen = useMemo(
-    () => relationen.filter((r) => activeRelationIds.has(r.id)),
+    () => relationen.filter((relation) => activeRelationIds.has(relation.id)),
     [relationen, activeRelationIds],
   );
 
@@ -623,11 +127,11 @@ export default function Versandnetz({
   // Group trucks by relation_id
   const trucksByRelation = useMemo(() => {
     const map = new Map<string, Truck[]>();
-    for (const r of relationen) map.set(r.id, []);
-    for (const t of trucks) {
-      if (t.relation_id != null && t.relation_id.trim() !== "") {
-        const list = map.get(t.relation_id);
-        if (list) list.push(t);
+    for (const relation of relationen) map.set(relation.id, []);
+    for (const truck of trucks) {
+      if (truck.relation_id != null && truck.relation_id.trim() !== "") {
+        const list = map.get(truck.relation_id);
+        if (list) list.push(truck);
       }
     }
     return map;
@@ -637,22 +141,22 @@ export default function Versandnetz({
   const getCellTrucks = (relationId: string, day: Dayjs) => {
     const dayStr = day.format("YYYY-MM-DD");
     const relationTrucks = trucksByRelation.get(relationId) ?? [];
-    return relationTrucks.filter((t) => t.ladedatum === dayStr);
+    return relationTrucks.filter((truck) => truck.ladedatum === dayStr);
   };
 
   const getDaySummary = (day: Dayjs) => {
     const dayStr = day.format("YYYY-MM-DD");
     let truckCount = 0;
     let sendungCount = 0;
-    for (const t of trucks) {
+    for (const truck of trucks) {
       if (
-        t.ladedatum === dayStr &&
-        t.relation_id != null &&
-        t.relation_id.trim() !== "" &&
-        activeRelationIds.has(t.relation_id)
+        truck.ladedatum === dayStr &&
+        truck.relation_id != null &&
+        truck.relation_id.trim() !== "" &&
+        activeRelationIds.has(truck.relation_id)
       ) {
         truckCount++;
-        sendungCount += (truckSendungenMap.get(t.id) ?? []).length;
+        sendungCount += (truckSendungenMap.get(truck.id) ?? []).length;
       }
     }
     return { truckCount, sendungCount };
@@ -664,17 +168,17 @@ export default function Versandnetz({
       visibleDays.map((d) => d.format("YYYY-MM-DD")),
     );
     const relationTrucks = (trucksByRelation.get(relationId) ?? []).filter(
-      (t) => visibleDayStrs.has(t.ladedatum),
+      (truck) => visibleDayStrs.has(truck.ladedatum),
     );
     let sendungCount = 0;
     let totalKg = 0;
     let totalLdm = 0;
-    for (const t of relationTrucks) {
-      const sendungen = truckSendungenMap.get(t.id) ?? [];
+    for (const truck of relationTrucks) {
+      const sendungen = truckSendungenMap.get(truck.id) ?? [];
       sendungCount += sendungen.length;
-      for (const s of sendungen) {
-        totalKg += s.gewicht ?? 0;
-        totalLdm += s.lademeter ?? 0;
+      for (const sendung of sendungen) {
+        totalKg += sendung.gewicht ?? 0;
+        totalLdm += sendung.lademeter ?? 0;
       }
     }
     return {
@@ -711,112 +215,26 @@ export default function Versandnetz({
       }}
     >
       {/* ── Navigation bar ── */}
-      <div className="flex items-center gap-3 px-4 h-11 bg-white border-b border-slate-200 shrink-0">
-        {/* Nav arrows */}
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-1.5 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => navigate(1)}
-            className="p-1.5 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Date label — fixed width to prevent layout jumps */}
-        <div className="flex items-center gap-2 w-64 shrink-0">
-          <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
-          <span className="text-sm font-semibold text-slate-800 truncate transition-opacity duration-100">
-            {dateLabel}
-          </span>
-          <span
-            className="text-[10px] font-medium text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 shrink-0 transition-opacity duration-100"
-            style={{
-              opacity: viewMode === "week" ? 1 : 0,
-              pointerEvents: viewMode === "week" ? "auto" : "none",
-            }}
-          >
-            KW {weekNum}
-          </span>
-        </div>
-
-        <button
-          onClick={goToday}
-          className="text-[11px] font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100
-                     rounded-md px-2.5 py-1 transition-colors shrink-0"
-        >
-          Heute
-        </button>
-
-        {/* Current time */}
-        <div className="flex items-center gap-1 text-[11px] text-slate-400 shrink-0">
-          <Clock className="h-3 w-3" />
-          <span className="font-mono font-medium" suppressHydrationWarning>
-            {now.format("HH:mm")}
-          </span>
-        </div>
-
-        {/* View switcher */}
-        <div className="flex rounded-md border border-slate-200 overflow-hidden text-[11px] ml-2 shrink-0">
-          {(["day", "3day", "week"] as ViewMode[]).map((v) => (
-            <button
-              key={v}
-              onClick={() => setViewMode(v)}
-              className={`px-2.5 py-1 font-medium transition-colors
-                ${
-                  viewMode === v
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-500 hover:bg-slate-50"
-                }`}
-            >
-              {VIEW_LABELS[v]}
-            </button>
-          ))}
-        </div>
-
-        {/* Right side: filter, relation count, buttons */}
-        <div className="ml-auto flex items-center gap-2">
-          {relationen.length > 0 && (
-            <RelationFilter
-              relationen={relationen}
-              activeIds={activeRelationIds}
-              onToggle={toggleRelation}
-            />
-          )}
-
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-            <Route className="h-3.5 w-3.5" />
-            <span>{filteredRelationen.length} Relationen</span>
-          </div>
-
-          <button
-            onClick={() => setShowNewRow(true)}
-            className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px]
-                       font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-          >
-            <Plus className="h-3 w-3" />
-            Relation
-          </button>
-
-          <button
-            onClick={onCreateTruck}
-            className="flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-[11px]
-                       font-semibold text-white hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="h-3 w-3" />
-            Neuer LKW
-          </button>
-        </div>
-      </div>
+      <VersandnetzHeader
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        currentDate={currentDate}
+        onNavigate={navigate}
+        onGoToday={goToday}
+        dateLabel={dateLabel}
+        weekNum={weekNum}
+        now={now}
+        relationen={relationen}
+        activeRelationIds={activeRelationIds}
+        onToggleRelation={toggleRelation}
+        filteredRelationenCount={filteredRelationen.length}
+        onAddRelationClick={() => setShowNewRow(true)}
+        onCreateTruck={onCreateTruck}
+      />
 
       {/* ── New Relation inline form ── */}
       {showNewRow && (
-        <NewRelationRow
+        <NewRelationInlineFormRow
           onSave={handleSaveNewRelation}
           onCancel={() => setShowNewRow(false)}
         />
@@ -826,7 +244,7 @@ export default function Versandnetz({
       <div className="flex-1 overflow-auto">
         <div>
           {isLoading === true ? (
-            <GridSkeleton cols={visibleDays.length} />
+            <VersandnetzLoadingGrid cols={visibleDays.length} />
           ) : (
             <table
               className="w-full border-collapse"
@@ -964,7 +382,7 @@ export default function Versandnetz({
 
                       {/* Day cells — show truck cards */}
                       {visibleDays.map((day) => (
-                        <NetCell
+                        <RelationDayCell
                           key={day.format("YYYY-MM-DD")}
                           trucks={getCellTrucks(relation.id, day)}
                           truckSendungenMap={truckSendungenMap}

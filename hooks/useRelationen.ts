@@ -24,7 +24,10 @@ function useSupabase() {
   const { getToken } = useAuth();
   return async () => {
     const token = await getToken();
-    return token ? createAuthClient(token) : createClient();
+    if (typeof token === "string" && token.trim().length > 0) {
+      return createAuthClient(token);
+    }
+    return createClient();
   };
 }
 
@@ -36,14 +39,17 @@ export function useRelationen() {
     queryKey: ["relationen"],
     queryFn: async () => {
       const supabase = await getSupabase();
-      const { data, error } = await supabase
+      const { data, error } = (await supabase
         .from("relationen")
         .select("*")
         .is("deleted_at", null)
-        .order("nummer", { ascending: true });
+        .order("nummer", { ascending: true })) as {
+        data: Relation[] | null;
+        error: unknown;
+      };
 
-      if (error) throw error;
-      return data;
+      if (error != null) throw error;
+      return data ?? [];
     },
   });
 }
@@ -56,17 +62,21 @@ export function useCreateRelation() {
   return useMutation({
     mutationFn: async (input: RelationInput) => {
       const supabase = await getSupabase();
-      const { data, error } = await supabase
+      const { data, error } = (await supabase
         .from("relationen")
         .insert(input)
         .select()
-        .single();
+        .single()) as {
+        data: Relation | null;
+        error: unknown;
+      };
 
-      if (error) throw error;
-      return data as Relation;
+      if (error != null) throw error;
+      if (!data) throw new Error("Relation konnte nicht erstellt werden");
+      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["relationen"] });
+      void queryClient.invalidateQueries({ queryKey: ["relationen"] });
     },
   });
 }
@@ -79,18 +89,22 @@ export function useUpdateRelation() {
   return useMutation({
     mutationFn: async ({ id, ...input }: Partial<RelationInput> & { id: string }) => {
       const supabase = await getSupabase();
-      const { data, error } = await supabase
+      const { data, error } = (await supabase
         .from("relationen")
         .update(input)
         .eq("id", id)
         .select()
-        .single();
+        .single()) as {
+        data: Relation | null;
+        error: unknown;
+      };
 
-      if (error) throw error;
-      return data as Relation;
+      if (error != null) throw error;
+      if (!data) throw new Error("Relation konnte nicht aktualisiert werden");
+      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["relationen"] });
+      void queryClient.invalidateQueries({ queryKey: ["relationen"] });
     },
   });
 }
@@ -108,10 +122,10 @@ export function useDeleteRelation() {
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", id);
 
-      if (error) throw error;
+      if (error != null) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["relationen"] });
+      void queryClient.invalidateQueries({ queryKey: ["relationen"] });
     },
   });
 }

@@ -25,6 +25,9 @@ export function StatCard({
   description,
   variant = "default",
 }: StatCardProps) {
+  const hasDescription =
+    typeof description === "string" && description.trim().length > 0;
+
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
       <div className="flex items-center justify-between mb-4">
@@ -34,7 +37,7 @@ export function StatCard({
         </div>
       </div>
       <p className="text-3xl font-bold text-slate-900">{value}</p>
-      {description && (
+      {hasDescription && (
         <p className="text-sm text-slate-400 mt-1">{description}</p>
       )}
     </div>

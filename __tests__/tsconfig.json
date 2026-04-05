@@ -1,7 +1,7 @@
 {
   "extends": "../tsconfig.test.json",
   "compilerOptions": {
-    "moduleResolution": "node16",
+    "moduleResolution": "nodenext",
     "ignoreDeprecations": "6.0"
   }
 }

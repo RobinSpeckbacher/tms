@@ -10,7 +10,10 @@ function useSupabase() {
   const { getToken } = useAuth();
   return async () => {
     const token = await getToken();
-    return token ? createAuthClient(token) : createClient();
+    if (typeof token === "string" && token.trim().length > 0) {
+      return createAuthClient(token);
+    }
+    return createClient();
   };
 }
 
@@ -61,7 +64,7 @@ export function useUploadCmr() {
       return { path, fileName: file.name };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sendungen"] });
+      void queryClient.invalidateQueries({ queryKey: ["sendungen"] });
     },
   });
 }
@@ -98,7 +101,7 @@ export function useDeleteCmr() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sendungen"] });
+      void queryClient.invalidateQueries({ queryKey: ["sendungen"] });
     },
   });
 }

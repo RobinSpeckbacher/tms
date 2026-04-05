@@ -15,12 +15,11 @@ import {
   FileText,
   Loader2,
   AlertTriangle,
-  Route,
 } from "lucide-react";
 import type { Truck } from "@/hooks/useTrucks";
 import type { SendungRow } from "@/hooks/useSendungen";
 import { generateCmrPdf } from "@/services/cmrService";
-import { useTruckRoute } from "@/hooks/useTruckRoute";
+import { TruckRouteSummarySection } from "./truck-detail-panel/TruckRouteSummarySection";
 
 /* ── Helpers ──────────────────────────────────────────────────────── */
 const PE_SHORT: Record<string, string> = {
@@ -44,10 +43,6 @@ function barColor(p: number) {
 
 function hasText(value: string | null | undefined): value is string {
   return typeof value === "string" && value.trim().length > 0;
-}
-
-function hasFiniteNumber(value: number | null | undefined): value is number {
-  return typeof value === "number" && Number.isFinite(value);
 }
 
 /* ── Props ────────────────────────────────────────────────────────── */
@@ -413,124 +408,13 @@ function TruckDetailPanelInner({
           </div>
 
           {/* ── Route section ── */}
-          <RouteSection
+          <TruckRouteSummarySection
             sendungen={sendungen}
-            preis_pro_km={truck.preis_pro_km}
+            preisProKilometer={truck.preis_pro_km}
+            kosten={truck.kosten}
           />
         </div>
       </div>
-    </div>
-  );
-}
-
-/* ── Route Section Component ──────────────────────────────────────── */
-function RouteSection({
-  sendungen,
-  preis_pro_km,
-}: {
-  sendungen: SendungRow[];
-  preis_pro_km?: number;
-}) {
-  const { route, isLoading: routeLoading } = useTruckRoute(sendungen);
-
-  if (sendungen.length === 0) return null;
-
-  const autoGesamtpreis =
-    hasFiniteNumber(preis_pro_km) && hasFiniteNumber(route?.totalKm)
-      ? (preis_pro_km * route.totalKm).toFixed(2)
-      : null;
-
-  return (
-    <div className="px-4 py-3 border-t border-slate-200">
-      <h3 className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-        <Route className="h-3.5 w-3.5" />
-        Route
-      </h3>
-
-      {routeLoading && (
-        <div className="flex items-center gap-2 text-xs text-slate-400 mb-3">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Route wird berechnet…
-        </div>
-      )}
-
-      {route && (
-        <>
-          {/* Distance + duration summary */}
-          <div className="flex items-center gap-3 mb-3">
-            <div className="flex-1 rounded-md bg-slate-50 border border-slate-200 px-3 py-2 text-center">
-              <p className="text-[10px] text-slate-400 uppercase tracking-wider">
-                Distanz
-              </p>
-              <p className="text-sm font-bold text-slate-800 mt-0.5">
-                {route.totalDistanceFormatted}
-              </p>
-            </div>
-            <div className="flex-1 rounded-md bg-slate-50 border border-slate-200 px-3 py-2 text-center">
-              <p className="text-[10px] text-slate-400 uppercase tracking-wider">
-                Fahrzeit
-              </p>
-              <p className="text-sm font-bold text-slate-800 mt-0.5">
-                {route.totalDurationFormatted}
-              </p>
-            </div>
-          </div>
-
-          {/* Route legs */}
-          {route.legs.length > 0 && (
-            <div className="space-y-1 mb-3">
-              {route.legs.map((leg, i) => {
-                const isDeadhead = i % 2 === 1 && sendungen.length > 1;
-                return (
-                  <div
-                    key={i}
-                    className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[11px] ${
-                      isDeadhead
-                        ? "bg-orange-50 border border-orange-200"
-                        : "bg-slate-50 border border-slate-200"
-                    }`}
-                  >
-                    <div
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        isDeadhead ? "bg-orange-400" : "bg-emerald-500"
-                      }`}
-                    />
-                    <span className="text-slate-700 truncate">{leg.from}</span>
-                    <span className="text-slate-300">→</span>
-                    <span className="text-slate-700 truncate">{leg.to}</span>
-                    {isDeadhead && (
-                      <span className="text-orange-500 italic text-[10px]">
-                        Leerfahrt
-                      </span>
-                    )}
-                    <span className="ml-auto text-slate-500 font-semibold whitespace-nowrap">
-                      {leg.distanceKm > 0 ? `${leg.distanceKm} km` : "–"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Auto Gesamtpreis from preis_pro_km */}
-          {autoGesamtpreis != null && (
-            <div className="flex items-center justify-between rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs">
-              <span className="text-slate-500">
-                {route.totalKm} km × {preis_pro_km} €/km
-              </span>
-              <span className="text-emerald-700 font-bold">
-                = {autoGesamtpreis} €
-              </span>
-            </div>
-          )}
-        </>
-      )}
-
-      {!route && !routeLoading && (
-        <p className="text-xs text-slate-400">
-          Route konnte nicht berechnet werden.
-        </p>
-      )}
     </div>
   );
 }

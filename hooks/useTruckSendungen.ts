@@ -16,7 +16,10 @@ function useSupabase() {
   const { getToken } = useAuth();
   return async () => {
     const token = await getToken();
-    return token ? createAuthClient(token) : createClient();
+    if (typeof token === "string" && token.trim().length > 0) {
+      return createAuthClient(token);
+    }
+    return createClient();
   };
 }
 
@@ -28,13 +31,16 @@ export function useTruckSendungen() {
     queryKey: ["truck_sendungen"],
     queryFn: async () => {
       const supabase = await getSupabase();
-      const { data, error } = await supabase
+      const { data, error } = (await supabase
         .from("truck_sendungen")
         .select("*")
-        .order("position", { ascending: true });
+        .order("position", { ascending: true })) as {
+        data: TruckSendung[] | null;
+        error: unknown;
+      };
 
-      if (error) throw error;
-      return data;
+      if (error != null) throw error;
+      return data ?? [];
     },
   });
 }
@@ -51,11 +57,11 @@ export function useAssignSendung() {
         p_truck_id: truckId,
         p_sendung_id: sendungId,
       });
-      if (error) throw error;
+      if (error != null) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["truck_sendungen"] });
-      queryClient.invalidateQueries({ queryKey: ["sendungen"] });
+      void queryClient.invalidateQueries({ queryKey: ["truck_sendungen"] });
+      void queryClient.invalidateQueries({ queryKey: ["sendungen"] });
     },
   });
 }
@@ -71,11 +77,11 @@ export function useUnassignSendung() {
       const { error } = await supabase.rpc("unassign_sendung_from_truck", {
         p_sendung_id: sendungId,
       });
-      if (error) throw error;
+      if (error != null) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["truck_sendungen"] });
-      queryClient.invalidateQueries({ queryKey: ["sendungen"] });
+      void queryClient.invalidateQueries({ queryKey: ["truck_sendungen"] });
+      void queryClient.invalidateQueries({ queryKey: ["sendungen"] });
     },
   });
 }

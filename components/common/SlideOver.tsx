@@ -117,7 +117,7 @@ export default function SlideOver({
         <Box sx={{ flex: 1, overflow: "auto", px: 2.5, py: 2 }}>{children}</Box>
 
         {/* Actions */}
-        {actions && (
+        {actions != null && (
           <>
             <Divider />
             <Stack
