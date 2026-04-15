@@ -125,11 +125,12 @@ export default function UnternehmenAutocomplete({
           endDecorator={
             isLoading ? <CircularProgress size="sm" sx={{ mr: 0.5 }} /> : null
           }
-          renderOption={(props, option) => {
+          renderOption={(props, option, index) => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { key, ...rest } = props as typeof props & { key: string };
+            const key = `listItem-${index}-${option.id}`;
+
             return (
-              <AutocompleteOption key={option.id} {...rest}>
+              <AutocompleteOption key={key} {...props}>
                 <Box>
                   <Typography level="body-sm" sx={{ fontWeight: 500 }}>
                     {option.name}

@@ -247,31 +247,36 @@ export function useGenerateRecurringSendungen() {
             .add(vorlage.recurrence_offset_days ?? 0, "day")
             .format("YYYY-MM-DD");
 
-          const generatedReferenz = `V-${dayjs(loadingDate).format("YYYYMMDD")}-${vorlage.id.slice(0, 4).toUpperCase()}`;
+          const generatedReferenz = `V-${dayjs(loadingDate).format("YYYYMMDD")}-${vorlage.id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
 
-          await supabase.from("sendungen").insert({
-            referenz: generatedReferenz,
-            vorlage_id: vorlage.id,
-            kunde_id: vorlage.kunde_id,
-            lade_plz: vorlage.lade_plz,
-            lade_ort: vorlage.lade_ort,
-            lade_adresse: vorlage.lade_adresse,
-            lade_land: vorlage.lade_land,
-            entlade_plz: vorlage.entlade_plz,
-            entlade_ort: vorlage.entlade_ort,
-            entlade_adresse: vorlage.entlade_adresse,
-            entlade_land: vorlage.entlade_land,
-            ladedatum: loadingDate,
-            ladezeit: vorlage.recurrence_time_lade,
-            entladedatum: unloadingDate,
-            entladezeit: vorlage.recurrence_time_entlade,
-            gewicht: vorlage.gewicht,
-            packungseinheit: vorlage.packungseinheit,
-            anzahl: vorlage.anzahl,
-            lademeter: vorlage.lademeter,
-            verkaufspreis: vorlage.verkaufspreis,
-            status: "offen",
-          });
+          // Use upsert on (vorlage_id, ladedatum) to be idempotent: a second
+          // concurrent run or a page-refresh click will not cause a duplicate-key error.
+          await supabase.from("sendungen").upsert(
+            {
+              referenz: generatedReferenz,
+              vorlage_id: vorlage.id,
+              kunde_id: vorlage.kunde_id,
+              lade_plz: vorlage.lade_plz,
+              lade_ort: vorlage.lade_ort,
+              lade_adresse: vorlage.lade_adresse,
+              lade_land: vorlage.lade_land,
+              entlade_plz: vorlage.entlade_plz,
+              entlade_ort: vorlage.entlade_ort,
+              entlade_adresse: vorlage.entlade_adresse,
+              entlade_land: vorlage.entlade_land,
+              ladedatum: loadingDate,
+              ladezeit: vorlage.recurrence_time_lade,
+              entladedatum: unloadingDate,
+              entladezeit: vorlage.recurrence_time_entlade,
+              gewicht: vorlage.gewicht,
+              packungseinheit: vorlage.packungseinheit,
+              anzahl: vorlage.anzahl,
+              lademeter: vorlage.lademeter,
+              verkaufspreis: vorlage.verkaufspreis,
+              status: "offen",
+            },
+            { onConflict: "vorlage_id,ladedatum", ignoreDuplicates: true },
+          );
 
           totalShipmentsCreated++;
         }

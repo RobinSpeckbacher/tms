@@ -3,15 +3,18 @@
 import { Loader2, Route } from "lucide-react";
 import type { SendungRow } from "@/hooks/useSendungen";
 import { useTruckRoute } from "@/hooks/useTruckRoute";
+import type { UseTruckRouteOptions } from "@/hooks/useTruckRoute";
 
 function hasFiniteNumber(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-interface TruckRouteSummarySectionProps {
+interface TruckRouteSummarySectionProps extends UseTruckRouteOptions {
   sendungen: SendungRow[];
   preisProKilometer?: number;
   kosten?: number | null;
+  /** Plain-text truck home base (city), forwarded as startLocation. */
+  standortOrt?: string | null;
 }
 
 const labelBadgeRegex = /(.*) \(x(\d+) (Ladepunkte|Entladepunkte)\)$/;
@@ -31,8 +34,24 @@ export function TruckRouteSummarySection({
   sendungen,
   preisProKilometer,
   kosten,
+  standortOrt,
+  startPosition,
+  respectOrder,
 }: TruckRouteSummarySectionProps) {
-  const { route, isLoading: routeLoading } = useTruckRoute(sendungen);
+  const startLocation =
+    typeof standortOrt === "string" && standortOrt.trim().length > 0
+      ? {
+          plz: "",
+          ort: standortOrt,
+          land: "AT",
+        }
+      : null;
+
+  const { route, isLoading: routeLoading } = useTruckRoute(sendungen, {
+    startLocation,
+    startPosition,
+    respectOrder,
+  });
 
   if (sendungen.length === 0) return null;
 
@@ -141,14 +160,14 @@ export function TruckRouteSummarySection({
                       }`}
                     />
                     <span className="text-slate-700 truncate">{from.text}</span>
-                    {from.badge && (
+                    {from.badge !== null && (
                       <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
                         {from.badge}
                       </span>
                     )}
                     <span className="text-slate-300">→</span>
                     <span className="text-slate-700 truncate">{to.text}</span>
-                    {to.badge && (
+                    {to.badge !== null && (
                       <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
                         {to.badge}
                       </span>

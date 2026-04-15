@@ -412,6 +412,7 @@ function TruckDetailPanelInner({
             sendungen={sendungen}
             preisProKilometer={truck.preis_pro_km}
             kosten={truck.kosten}
+            standortOrt={truck.standort_ort}
           />
         </div>
       </div>

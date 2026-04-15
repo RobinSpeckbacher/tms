@@ -397,7 +397,7 @@ export function useGenerateRecurringTrucksWithShipments() {
             if (existingShipment) {
               shipmentId = existingShipment.id;
             } else {
-              const generatedReferenz = `V-${dayjs(loadingDate).format("YYYYMMDD")}-${linkedSendungVorlage.id.slice(0, 4).toUpperCase()}`;
+              const generatedReferenz = `V-${dayjs(loadingDate).format("YYYYMMDD")}-${linkedSendungVorlage.id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
               const shipmentUnloadingDate = dayjs(loadingDate)
                 .add(linkedSendungVorlage.recurrence_offset_days ?? 0, "day")
                 .format("YYYY-MM-DD");

@@ -7,8 +7,12 @@ import Option from "@mui/joy/Option";
 import Select from "@mui/joy/Select";
 import Stack from "@mui/joy/Stack";
 import Typography from "@mui/joy/Typography";
+import Autocomplete from "@mui/joy/Autocomplete";
+import AutocompleteOption from "@mui/joy/AutocompleteOption";
+import CircularProgress from "@mui/joy/CircularProgress";
 import UnternehmenAutocomplete from "@/components/common/UnternehmenAutocomplete";
 import type { Unternehmen } from "@/hooks/useUnternehmen";
+import { useOrtLookup, type PlzEntry } from "@/hooks/usePlzLookup";
 import {
   truckInputStyles,
   truckStatusOptions,
@@ -141,6 +145,8 @@ export interface TruckFormPlanningTabProps {
     name: string;
     farbe: string | null;
   }[];
+  standortOrt: string;
+  onStandortOrtChange: (value: string) => void;
   loadingDate: string;
   onLoadingDateChange: (value: string) => void;
   loadingTime: string;
@@ -161,9 +167,68 @@ export interface TruckFormPlanningTabProps {
   onLoadingMeterCapacityChange: (value: string) => void;
 }
 
+function StandortOrtInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const { data: suggestions = [], isLoading } = useOrtLookup(value);
+
+  const handleSelect = (_e: unknown, option: string | PlzEntry | null) => {
+    if (option !== null && typeof option !== "string") {
+      onChange(option.ort);
+    }
+  };
+
+  return (
+    <TruckFormField label="Standort (Startpunkt)">
+      <Autocomplete
+        size="sm"
+        freeSolo
+        placeholder="z.B. Wien oder Hamburg"
+        inputValue={value}
+        onInputChange={(_e, val) => onChange(val)}
+        value={null}
+        onChange={handleSelect}
+        options={suggestions}
+        getOptionLabel={(o) => (typeof o === "string" ? o : o.ort)}
+        isOptionEqualToValue={(a, b) =>
+          typeof a !== "string" && typeof b !== "string" && a.id === b.id
+        }
+        loading={isLoading}
+        filterOptions={(x) => x}
+        noOptionsText={value.length < 2 ? "Mind. 2 Zeichen…" : "Keine Treffer"}
+        endDecorator={isLoading ? <CircularProgress size="sm" sx={{ mr: 0.5 }} /> : null}
+        renderOption={(optProps, option) => {
+          const { key, ...rest } = optProps as typeof optProps & { key: React.Key };
+          return (
+            <AutocompleteOption key={key} {...rest}>
+              <Typography level="body-sm" sx={{ fontWeight: 500 }}>
+                {typeof option !== "string" && option.ort}
+              </Typography>
+              &nbsp;
+              <Typography level="body-xs" sx={{ color: "#57688e" }}>
+                {typeof option !== "string" && `${option.plz} (${option.land})`}
+              </Typography>
+            </AutocompleteOption>
+          );
+        }}
+        sx={{ "--Input-focusedHighlight": "#155dfc", color: "#0f172b" }}
+      />
+    </TruckFormField>
+  );
+}
+
 export function TruckFormPlanningTab(props: TruckFormPlanningTabProps) {
   return (
     <Stack spacing={2}>
+      <StandortOrtInput
+        value={props.standortOrt}
+        onChange={props.onStandortOrtChange}
+      />
+
       <Stack direction="row" spacing={1.5}>
         <Box sx={{ flex: 1 }}>
           <TruckFormField label="Ladedatum" required>

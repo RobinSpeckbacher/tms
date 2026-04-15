@@ -99,6 +99,9 @@ function TruckFormInner({
           preisProKm:
             truck.preis_pro_km != null ? String(truck.preis_pro_km) : "",
           kosten: truck.kosten != null ? String(truck.kosten) : "",
+          standortPlz: (truck.standort_plz as string) || "",
+          standortOrt: (truck.standort_ort as string) || "",
+          standortLand: (truck.standort_land as string) || "AT",
         };
       }
 
@@ -122,6 +125,9 @@ function TruckFormInner({
         lademeter: "",
         preisProKm: "",
         kosten: "",
+        standortPlz: "",
+        standortOrt: "",
+        standortLand: "AT",
       };
     }
     return {
@@ -144,6 +150,9 @@ function TruckFormInner({
       lademeter: "",
       preisProKm: "",
       kosten: "",
+      standortPlz: "",
+      standortOrt: "",
+      standortLand: "AT",
     };
   }, [selectedEvent, nextRef]);
 
@@ -181,6 +190,9 @@ function TruckFormInner({
   const [preisProKm, setPreisProKm] = useState(initial.preisProKm);
   const [kosten, setKosten] = useState(initial.kosten);
 
+  // ── Standort (only the city/ort is stored)
+  const [standortOrt, setStandortOrt] = useState(initial.standortOrt);
+
   if (open !== true) return null;
 
   const handleSubmit = async () => {
@@ -212,6 +224,7 @@ function TruckFormInner({
       lademeter: lademeter ? Number(lademeter) : undefined,
       preis_pro_km: preisProKm ? Number(preisProKm) : undefined,
       kosten: kosten ? Number(kosten) : undefined,
+      standort_ort: standortOrt.trim() || null,
       relation_id: relationId,
     };
 
@@ -404,6 +417,8 @@ function TruckFormInner({
         onPricePerKilometerChange={setPreisProKm}
         purchaseCost={kosten}
         onPurchaseCostChange={setKosten}
+        standortOrt={standortOrt}
+        onStandortOrtChange={setStandortOrt}
       />
     </SlideOver>
   );

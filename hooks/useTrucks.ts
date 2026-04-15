@@ -25,6 +25,9 @@ export interface Truck {
   preis_pro_km?: number;
   gesamtpreis?: number;
   kosten?: number;
+  standort_plz?: string | null;
+  standort_ort?: string | null;
+  standort_land?: string | null;
   distanz_km?: number;
   fahrzeit_min?: number;
   relation_id?: string | null;
@@ -50,6 +53,9 @@ export interface TruckInput {
   max_paletten?: number | null;
   max_gewicht?: number | null;
   lademeter?: number | null;
+  standort_plz?: string | null;
+  standort_ort?: string | null;
+  standort_land?: string | null;
   preis_pro_km?: number | null;
   gesamtpreis?: number | null;
   kosten?: number | null;

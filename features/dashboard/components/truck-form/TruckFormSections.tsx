@@ -87,6 +87,8 @@ export interface TruckFormTabsSectionProps {
   onVehicleTypeIdChange: (value: string) => void;
   selectedColor: string;
   onSelectedColorChange: (value: string) => void;
+  standortOrt: string;
+  onStandortOrtChange: (value: string) => void;
   loadingDate: string;
   onLoadingDateChange: (value: string) => void;
   loadingTime: string;

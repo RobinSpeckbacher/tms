@@ -35,6 +35,12 @@ export interface TruckRouteResult {
   totalDurationFormatted: string;
   /** Individual legs of the route */
   legs: RouteLeg[];
+  /** Distance driven with no load on board (Leerfahrt) in km */
+  deadheadKm: number;
+  /** Deadhead share of total distance, 0–100 */
+  deadheadPercent: number;
+  /** True when more than 25 % of driving distance is Leerfahrt */
+  hasExcessiveDeadhead: boolean;
 }
 
 /* ── Core calculation ───────────────────────────────────────────────── */
@@ -53,8 +59,19 @@ export interface TruckRouteResult {
  */
 async function calculateTruckRoute(
   sendungen: SendungLocation[],
+  startPosition?: { lat: number; lon: number },
+  startLocation?: { plz: string; ort: string; land: string } | null,
+  respectOrder?: boolean,
 ): Promise<TruckRouteResult | null> {
   if (!sendungen.length) return null;
+
+  // Resolve start position: prefer pre-geocoded coords; fall back to geocoding
+  // the structured standort address from the truck record.
+  let resolvedStart = startPosition;
+  if (!resolvedStart && startLocation && startLocation.ort.trim().length > 0) {
+    const geo = await geocodeLocation(startLocation.plz, startLocation.ort, startLocation.land);
+    if (geo) resolvedStart = { lat: geo.lat, lon: geo.lon };
+  }
 
   if (sendungen.length === 1) {
     const sendung = sendungen[0];
@@ -105,10 +122,11 @@ async function calculateTruckRoute(
           isDeadhead: false,
         },
       ],
+      deadheadKm: 0,
+      deadheadPercent: 0,
+      hasExcessiveDeadhead: false,
     };
   }
-
-  const CLUSTER_RADIUS_KM = 75;
 
   const toWaypoint = (
     plz: string | null,
@@ -121,6 +139,7 @@ async function calculateTruckRoute(
     label: ort,
   });
 
+  // Great-circle distance between two coordinates (Haversine formula)
   const haversineKm = (
     a: { lat: number; lon: number },
     b: { lat: number; lon: number },
@@ -136,57 +155,13 @@ async function calculateTruckRoute(
     return 6371 * 2 * Math.asin(Math.sqrt(h));
   };
 
-  type Cluster = {
-    id: number;
-    lat: number;
-    lon: number;
-    labels: Set<string>;
-  };
-
-  const clusters: Cluster[] = [];
-  const assignCluster = (geo: { lat: number; lon: number }, label: string) => {
-    let bestIndex = -1;
-    let bestDistance = Number.POSITIVE_INFINITY;
-
-    clusters.forEach((cluster, index) => {
-      const distance = haversineKm(geo, cluster);
-      if (distance <= CLUSTER_RADIUS_KM && distance < bestDistance) {
-        bestDistance = distance;
-        bestIndex = index;
-      }
-    });
-
-    if (bestIndex === -1) {
-      const cluster: Cluster = {
-        id: clusters.length,
-        lat: geo.lat,
-        lon: geo.lon,
-        labels: new Set([label]),
-      };
-      clusters.push(cluster);
-      return cluster.id;
-    }
-
-    const cluster = clusters[bestIndex];
-    const labelCount = cluster.labels.size;
-    cluster.lat = (cluster.lat * labelCount + geo.lat) / (labelCount + 1);
-    cluster.lon = (cluster.lon * labelCount + geo.lon) / (labelCount + 1);
-    cluster.labels.add(label);
-    return cluster.id;
-  };
-
-  const formatClusterLabel = (cluster: Cluster) => {
-    const labels = Array.from(cluster.labels);
-    if (labels.length <= 2) return labels.join(" + ");
-    return `${labels[0]} + ${labels.length - 1}`;
-  };
-
   const shipments = sendungen.map((s, index) => ({
     index,
     pickup: toWaypoint(s.lade_plz, s.lade_ort, s.lade_land),
     dropoff: toWaypoint(s.entlade_plz, s.entlade_ort, s.entlade_land),
   }));
 
+  // Geocode all pickup and dropoff locations
   const geocodedPickups = [] as (Awaited<ReturnType<typeof geocodeLocation>> | null)[];
   const geocodedDropoffs = [] as (Awaited<ReturnType<typeof geocodeLocation>> | null)[];
 
@@ -207,176 +182,162 @@ async function calculateTruckRoute(
     );
   }
 
-  const shipmentNodes = shipments.map((shipment, idx) => {
-    const pickupGeo = geocodedPickups[idx];
-    const dropoffGeo = geocodedDropoffs[idx];
-    const pickupClusterId = pickupGeo
-      ? assignCluster(pickupGeo, shipment.pickup.label)
-      : null;
-    const dropoffClusterId = dropoffGeo
-      ? assignCluster(dropoffGeo, shipment.dropoff.label)
-      : null;
+  const shipmentNodes = shipments.map((shipment, idx) => ({
+    index: shipment.index,
+    pickup: shipment.pickup,
+    dropoff: shipment.dropoff,
+    pickupGeo: geocodedPickups[idx],
+    dropoffGeo: geocodedDropoffs[idx],
+  }));
 
-    return {
-      index: shipment.index,
-      pickup: shipment.pickup,
-      dropoff: shipment.dropoff,
-      pickupGeo,
-      dropoffGeo,
-      pickupClusterId,
-      dropoffClusterId,
-    };
-  });
+  type RoutableNode = {
+    index: number;
+    pickup: ReturnType<typeof toWaypoint>;
+    dropoff: ReturnType<typeof toWaypoint>;
+    pickupGeo: NonNullable<(typeof geocodedPickups)[0]>;
+    dropoffGeo: NonNullable<(typeof geocodedDropoffs)[0]>;
+  };
 
   const routable = shipmentNodes.filter(
-    (s) => s.pickupClusterId !== null && s.dropoffClusterId !== null,
+    (s): s is RoutableNode => s.pickupGeo !== null && s.dropoffGeo !== null,
   );
   const unroutable = shipmentNodes.filter(
-    (s) => s.pickupClusterId === null || s.dropoffClusterId === null,
+    (s) => s.pickupGeo === null || s.dropoffGeo === null,
   );
 
-  const pickupCounts = new Map<number, number>();
-  const dropoffCounts = new Map<number, number>();
-  const pickupLabels = new Map<number, string>();
-  const dropoffLabels = new Map<number, string>();
+  type Stop = {
+    nodeIdx: number;
+    type: 'pickup' | 'dropoff';
+    geo: { lat: number; lon: number };
+    label: string;
+  };
 
-  routable.forEach((shipment) => {
-    const pickupId = shipment.pickupClusterId as number;
-    const dropoffId = shipment.dropoffClusterId as number;
-    pickupCounts.set(pickupId, (pickupCounts.get(pickupId) ?? 0) + 1);
-    dropoffCounts.set(dropoffId, (dropoffCounts.get(dropoffId) ?? 0) + 1);
-    if (!pickupLabels.has(pickupId)) {
-      pickupLabels.set(pickupId, formatClusterLabel(clusters[pickupId]));
+  /**
+   * Pickup & Delivery nearest-neighbor (PDP-NN).
+   *
+   * Unlike a pair-sequential approach (pickup A → dropoff A → pickup B → dropoff B),
+   * this considers ALL 2n stops simultaneously and allows interleaving. At every
+   * step it picks the nearest eligible stop:
+   *   - Any un-collected pickup is always eligible.
+   *   - A dropoff is eligible only after its pickup has been visited.
+   *
+   * This correctly models a truck carrying multiple shipments at once (LTL /
+   * Teilladung) and avoids the unnecessary backtracking that pair-sequential
+   * routing produces when shipment routes overlap geographically.
+   *
+   * Example where interleaving wins:
+   *   Shipment A: Hamburg → Frankfurt
+   *   Shipment B: Hannover → Köln
+   *   Pair-sequential: Hamburg → Frankfurt → Hannover → Köln  (~1 250 km)
+   *   PDP-NN:          Hamburg → Hannover → Frankfurt → Köln  (~  710 km)
+   */
+  const orderStopsPDP = (nodes: RoutableNode[]): Stop[] => {
+    if (nodes.length === 0) return [];
+
+    // Build flat stop list: node N → allStops[N*2] = pickup, allStops[N*2+1] = dropoff
+    const allStops: Stop[] = nodes.flatMap((node, nodeIdx) => [
+      { nodeIdx, type: 'pickup', geo: node.pickupGeo, label: node.pickup.label },
+      { nodeIdx, type: 'dropoff', geo: node.dropoffGeo, label: node.dropoff.label },
+    ]);
+
+    const pickedUp = new Set<number>();  // nodeIdx values that have been picked up
+    const visitedIdx = new Set<number>(); // indices into allStops
+    const ordered: Stop[] = [];
+
+    // Seed selection:
+    // • If the truck's current position is known, start with the pickup nearest
+    //   to it — the driver heads straight to the closest job first.
+    // • Otherwise fall back to the northernmost pickup as a deterministic default.
+    let seedNode = 0;
+    if (resolvedStart) {
+      let bestDist = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < nodes.length; i++) {
+        const d = haversineKm(resolvedStart, nodes[i].pickupGeo);
+        if (d < bestDist) { bestDist = d; seedNode = i; }
+      }
+    } else {
+      for (let i = 1; i < nodes.length; i++) {
+        if (nodes[i].pickupGeo.lat > nodes[seedNode].pickupGeo.lat) seedNode = i;
+      }
     }
-    if (!dropoffLabels.has(dropoffId)) {
-      dropoffLabels.set(dropoffId, formatClusterLabel(clusters[dropoffId]));
-    }
-  });
+    const seedStopIdx = seedNode * 2;
+    ordered.push(allStops[seedStopIdx]);
+    pickedUp.add(seedNode);
+    visitedIdx.add(seedStopIdx);
+    let currentPos = allStops[seedStopIdx].geo;
 
-  const orderClustersNearest = (clusterIds: number[], startId: number) => {
-    const remaining = new Set(clusterIds);
-    const ordered: number[] = [];
-    let currentId = startId;
-    remaining.delete(currentId);
-    ordered.push(currentId);
+    while (ordered.length < allStops.length) {
+      let bestIdx = -1;
+      let bestDist = Number.POSITIVE_INFINITY;
 
-    while (remaining.size > 0) {
-      let bestId: number | null = null;
-      let bestDistance = Number.POSITIVE_INFINITY;
-      remaining.forEach((candidateId) => {
-        const distance = haversineKm(
-          clusters[currentId],
-          clusters[candidateId],
-        );
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestId = candidateId;
+      for (let i = 0; i < allStops.length; i++) {
+        if (visitedIdx.has(i)) continue;
+        const stop = allStops[i];
+        // Enforce pickup-before-delivery precedence constraint
+        if (stop.type === 'dropoff' && !pickedUp.has(stop.nodeIdx)) continue;
+
+        const dist = haversineKm(currentPos, stop.geo);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestIdx = i;
         }
-      });
+      }
 
-      if (bestId === null) break;
-      ordered.push(bestId);
-      remaining.delete(bestId);
-      currentId = bestId;
+      if (bestIdx === -1) break;
+
+      const chosen = allStops[bestIdx];
+      ordered.push(chosen);
+      visitedIdx.add(bestIdx);
+      if (chosen.type === 'pickup') pickedUp.add(chosen.nodeIdx);
+      currentPos = chosen.geo;
     }
 
     return ordered;
   };
 
-  const pickupClusterIds = Array.from(pickupCounts.keys());
-  const dropoffClusterIds = Array.from(dropoffCounts.keys());
+  /**
+   * Pair-sequential ordering: each shipment is routed as pickup → dropoff in
+   * the exact order the sendungen array provides. Used when the dispatcher has
+   * manually set the sequence and PDP-NN reordering should be skipped.
+   */
+  const buildPairSequential = (nodes: RoutableNode[]): Stop[] =>
+    nodes.flatMap((node, nodeIdx) => [
+      { nodeIdx, type: 'pickup' as const, geo: node.pickupGeo, label: node.pickup.label },
+      { nodeIdx, type: 'dropoff' as const, geo: node.dropoffGeo, label: node.dropoff.label },
+    ]);
 
-  const stops: { clusterId: number | null; label: string; delta: number }[] = [];
-  const withCountLabel = (label: string, count: number, kind: "pickup" | "dropoff") => {
-    if (count <= 1) return label;
-    const suffix = kind === "pickup" ? "Ladepunkte" : "Entladepunkte";
-    return `${label} (x${count} ${suffix})`;
-  };
+  const orderedStops = respectOrder === true
+    ? buildPairSequential(routable)
+    : orderStopsPDP(routable);
 
-  if (pickupClusterIds.length > 0) {
-    const firstPickupId = pickupClusterIds[0];
-    const orderedPickups = orderClustersNearest(pickupClusterIds, firstPickupId);
-    orderedPickups.forEach((clusterId) => {
-      const pickupCount = pickupCounts.get(clusterId) ?? 0;
-      const baseLabel =
-        pickupLabels.get(clusterId) ??
-        clusters[clusterId].labels.values().next().value;
-      stops.push({
-        clusterId,
-        label: withCountLabel(baseLabel, pickupCount, "pickup"),
-        delta: pickupCount,
-      });
-    });
+  // Append unroutable shipments as placeholder stops (no real geo) so they
+  // remain visible in the legs list even without a calculated distance.
+  const unroutableStops: Stop[] = unroutable.flatMap((s, i) => [
+    { nodeIdx: routable.length + i, type: 'pickup', geo: { lat: 0, lon: 0 }, label: s.pickup.label },
+    { nodeIdx: routable.length + i, type: 'dropoff', geo: { lat: 0, lon: 0 }, label: s.dropoff.label },
+  ]);
+  const allOrderedStops: Stop[] = [...orderedStops, ...unroutableStops];
 
-    if (dropoffClusterIds.length > 0) {
-      const lastPickupId = orderedPickups[orderedPickups.length - 1];
-      let firstDropoffId = dropoffClusterIds[0];
-      if (dropoffClusterIds.includes(lastPickupId)) {
-        firstDropoffId = lastPickupId;
-      } else {
-        let bestDistance = Number.POSITIVE_INFINITY;
-        dropoffClusterIds.forEach((candidateId) => {
-          const distance = haversineKm(
-            clusters[lastPickupId],
-            clusters[candidateId],
-          );
-          if (distance < bestDistance) {
-            bestDistance = distance;
-            firstDropoffId = candidateId;
-          }
-        });
-      }
-      const orderedDropoffs = orderClustersNearest(
-        dropoffClusterIds,
-        firstDropoffId,
-      );
-      orderedDropoffs.forEach((clusterId) => {
-        const dropoffCount = dropoffCounts.get(clusterId) ?? 0;
-        const baseLabel =
-          dropoffLabels.get(clusterId) ??
-          clusters[clusterId].labels.values().next().value;
-        stops.push({
-          clusterId,
-          label: withCountLabel(baseLabel, dropoffCount, "dropoff"),
-          delta: -dropoffCount,
-        });
-      });
-    }
-  }
-
-  // Append unroutable shipments as placeholder stops to keep them visible.
-  unroutable.forEach((shipment) => {
-    stops.push({
-      clusterId: null,
-      label: shipment.pickup.label,
-      delta: 1,
-    });
-    stops.push({
-      clusterId: null,
-      label: shipment.dropoff.label,
-      delta: -1,
-    });
-  });
-
-  // Build OSRM coords with dedupe for consecutive identical clusters
+  // Build OSRM coord list, deduplicating consecutive identical coordinates.
   const osrmCoords: { lon: number; lat: number }[] = [];
-  const originalToOsrm = new Array<number>(stops.length).fill(-1);
+  const stopToOsrm: number[] = [];
 
-  for (let i = 0; i < stops.length; i++) {
-    const clusterId = stops[i].clusterId;
-    if (clusterId === null) continue;
-    const cluster = clusters[clusterId];
+  for (const stop of allOrderedStops) {
+    if (stop.geo.lat === 0 && stop.geo.lon === 0) {
+      stopToOsrm.push(-1);
+      continue;
+    }
     const prev = osrmCoords.length > 0 ? osrmCoords[osrmCoords.length - 1] : null;
     if (
       prev &&
-      Math.abs(prev.lat - cluster.lat) < 0.001 &&
-      Math.abs(prev.lon - cluster.lon) < 0.001
+      Math.abs(prev.lat - stop.geo.lat) < 0.001 &&
+      Math.abs(prev.lon - stop.geo.lon) < 0.001
     ) {
-      originalToOsrm[i] = osrmCoords.length - 1;
-      continue;
+      stopToOsrm.push(osrmCoords.length - 1);
+    } else {
+      stopToOsrm.push(osrmCoords.length);
+      osrmCoords.push({ lon: stop.geo.lon, lat: stop.geo.lat });
     }
-    originalToOsrm[i] = osrmCoords.length;
-    osrmCoords.push({ lon: cluster.lon, lat: cluster.lat });
   }
 
   let multiRoute: Awaited<ReturnType<typeof fetchMultiWaypointRoute>> | null = null;
@@ -384,47 +345,44 @@ async function calculateTruckRoute(
     multiRoute = await fetchMultiWaypointRoute(osrmCoords);
   }
 
+  // Build legs with load tracking.
+  // currentLoad = number of shipments currently on the truck.
+  // After visiting a pickup  → load increases by 1.
+  // After visiting a dropoff → load decreases by 1.
+  // A leg is Leerfahrt (deadhead) when the truck departs with load = 0.
   const fullLegs: RouteLeg[] = [];
-  if (stops.length >= 2) {
-    let loadCount = 0;
-    loadCount += stops[0].delta;
-    for (let i = 0; i < stops.length - 1; i++) {
-      const fromOsrm = originalToOsrm[i];
-      const toOsrm = originalToOsrm[i + 1];
-      const isDeadhead = loadCount === 0;
-      const fromLabel = stops[i].label;
-      const toLabel = stops[i + 1].label;
+  let currentLoad = 0;
 
-      if (multiRoute && fromOsrm >= 0 && toOsrm >= 0 && toOsrm === fromOsrm + 1) {
-        const osrmLeg = multiRoute.legs[fromOsrm];
-        fullLegs.push({
-          from: fromLabel,
-          to: toLabel,
-          distanceKm: Math.round(osrmLeg.distance / 1000),
-          durationSeconds: osrmLeg.duration,
-          isDeadhead,
-        });
-      } else if (fromOsrm >= 0 && toOsrm >= 0 && toOsrm === fromOsrm) {
-        fullLegs.push({
-          from: fromLabel,
-          to: toLabel,
-          distanceKm: 0,
-          durationSeconds: 0,
-          isDeadhead,
-        });
-      } else {
-        fullLegs.push({
-          from: fromLabel,
-          to: toLabel,
-          distanceKm: 0,
-          durationSeconds: 0,
-          isDeadhead,
-        });
-      }
+  for (let i = 0; i < allOrderedStops.length - 1; i++) {
+    const from = allOrderedStops[i];
+    const to = allOrderedStops[i + 1];
+    const fromOsrm = stopToOsrm[i];
+    const toOsrm = stopToOsrm[i + 1];
 
-      loadCount += stops[i + 1].delta;
+    // Update load for the stop we are departing from
+    if (from.type === 'pickup') currentLoad++;
+    else currentLoad--;
+
+    const isDeadhead = currentLoad === 0;
+
+    let distanceKm = 0;
+    let durationSeconds = 0;
+
+    if (multiRoute && fromOsrm >= 0 && toOsrm >= 0 && toOsrm === fromOsrm + 1) {
+      const osrmLeg = multiRoute.legs[fromOsrm];
+      distanceKm = Math.round(osrmLeg.distance / 1000);
+      durationSeconds = osrmLeg.duration;
     }
+    // fromOsrm === toOsrm → same coord, 0 km / 0 s (already initialised above)
+
+    fullLegs.push({ from: from.label, to: to.label, distanceKm, durationSeconds, isDeadhead });
   }
+
+  const totalKm = multiRoute ? Math.round(multiRoute.distance / 1000) : 0;
+  const deadheadKm = fullLegs
+    .filter((l) => l.isDeadhead)
+    .reduce((sum, l) => sum + l.distanceKm, 0);
+  const deadheadPercent = totalKm > 0 ? Math.round((deadheadKm / totalKm) * 100) : 0;
 
   if (!multiRoute) {
     return {
@@ -433,41 +391,81 @@ async function calculateTruckRoute(
       totalDistanceFormatted: formatDistance(0),
       totalDurationFormatted: formatDuration(0),
       legs: fullLegs,
+      deadheadKm,
+      deadheadPercent,
+      hasExcessiveDeadhead: false,
     };
   }
 
   return {
-    totalKm: Math.round(multiRoute.distance / 1000),
+    totalKm,
     totalDurationSeconds: multiRoute.duration,
     totalDistanceFormatted: formatDistance(multiRoute.distance),
     totalDurationFormatted: formatDuration(multiRoute.duration),
     legs: fullLegs,
+    deadheadKm,
+    deadheadPercent,
+    hasExcessiveDeadhead: deadheadPercent > 25,
   };
 }
 
 /* ── React hook ─────────────────────────────────────────────────────── */
 
+export interface UseTruckRouteOptions {
+  /**
+   * The truck's current/home position before loading the first shipment.
+   * When provided, the PDP-NN algorithm seeds from the pickup nearest to this
+   * location instead of the default northernmost-pickup heuristic.
+   *
+   * Obtain from a geocoded home-base address or a live GPS coordinate.
+   */
+  startPosition?: { lat: number; lon: number };
+  /**
+   * The truck's home base as a structured address (plz + ort + land).
+   * Geocoded automatically inside the hook using the same geocoding service
+   * as shipment locations. Use this when you have the standort from the truck
+   * record. startPosition takes precedence if both are provided.
+   */
+  startLocation?: { plz: string; ort: string; land: string } | null;
+  /**
+   * When true, shipments are routed in the exact order they appear in the
+   * sendungen array (pair-sequential, no PDP interleaving). Use this when the
+   * dispatcher has manually arranged the sequence and the algorithm should not
+   * reorder it.
+   */
+  respectOrder?: boolean;
+}
+
 /**
  * Calculate the full driving route for a truck based on its assigned sendungen.
  *
  * Usage:
- *   const { route, isLoading } = useTruckRoute(assignedSendungen);
+ *   const { route, isLoading } = useTruckRoute(sendungen, { startPosition: { lat: 48.2, lon: 16.4 } });
  *   // route?.totalKm → 680
  *   // route?.totalDistanceFormatted → "680 km"
  *   // route?.legs → [{ from: "Wien", to: "München", distanceKm: 435 }, ...]
+ *   // route?.hasExcessiveDeadhead → true/false
  */
-export function useTruckRoute(sendungen: SendungLocation[]) {
-  const routingVersion = "clustered-v3";
-  // Build a stable query key from sendung locations
+export function useTruckRoute(
+  sendungen: SendungLocation[],
+  options: UseTruckRouteOptions = {},
+) {
+  const { startPosition, startLocation, respectOrder } = options;
+  const routingVersion = "pdp-nn-v1";
+
   const locationKey = sendungen
     .map((s) => `${s.lade_plz}|${s.lade_ort}|${s.entlade_plz}|${s.entlade_ort}`)
     .join(";");
+  const startKey = startPosition
+    ? `${startPosition.lat},${startPosition.lon}`
+    : (startLocation ? `${startLocation.plz}|${startLocation.ort}|${startLocation.land}` : "auto");
+  const orderKey = respectOrder === true ? "manual" : "pdp";
 
   const enabled = sendungen.length > 0;
 
   const { data, isLoading, error } = useQuery<TruckRouteResult | null>({
-    queryKey: ["truck-route", routingVersion, locationKey],
-    queryFn: () => calculateTruckRoute(sendungen),
+    queryKey: ["truck-route", routingVersion, locationKey, startKey, orderKey],
+    queryFn: () => calculateTruckRoute(sendungen, startPosition, startLocation, respectOrder),
     enabled,
     staleTime: 1000 * 60 * 30,
     retry: 1,
