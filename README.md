@@ -15,9 +15,9 @@
 <!-- PROJEKT DEMO VIDEO -->
 > **Vollständige Demo**
 
-https://github.com/user-attachments/assets/REPLACE_WITH_VIDEO_ID
+[![Demo ansehen](assets/images/kpi-dashboard.png)](assets/videos/showCase.mp4)
 
-*Die obige Zeile durch die GitHub-Asset-URL der eigenen `.mp4`-Demovideo ersetzen.*
+*Klick auf das Vorschaubild öffnet `assets/videos/showCase.mp4`. Für **Inline-Wiedergabe** auf GitHub: Video in ein Issue/PR ziehen und die generierte `https://github.com/user-attachments/...`-URL hier einfügen.*
 
 ---
 
@@ -54,9 +54,9 @@ TMS ist ein internes Transportmanagementsystem für Logistikteams, die Sendungen
 
 Detaillierte Sendungen in Sekunden anlegen. Be- und Entladeorte, Frachtdaten (Gewicht, Volumen, Lademeter, Verpackungsart), Kundenreferenz, Verkaufspreis und Zeitfenster – alles in einem strukturierten Formular.
 
-![Sendungserstellung](docs/assets/screenshots/sendungserstellung.png)
+![Sendungserstellung](assets/images/sendungserstellung.png)
 
-> **Bild hinzufügen:** Screenshot des Sendungserstellungs-Modals aufnehmen und unter `docs/assets/screenshots/sendungserstellung.png` speichern.
+> **Bild hinzufügen:** Screenshot des Sendungserstellungs-Modals aufnehmen und unter `assets/images/sendungserstellung.png` speichern.
 
 ---
 
@@ -64,9 +64,9 @@ Detaillierte Sendungen in Sekunden anlegen. Be- und Entladeorte, Frachtdaten (Ge
 
 Die gesamte Fahrzeugflotte erfassen und verwalten. Jeder Eintrag speichert Kennzeichen, Fahrername, aktuellen Status (`verfügbar`, `geplant`, `im Einsatz`) sowie Live-GPS-Koordinaten, die direkt auf der Karte erscheinen.
 
-![Fahrzeugverwaltung](docs/assets/screenshots/truck-management.png)
+![Fahrzeugverwaltung](assets/images/fahrzeugverwaltung.png)
 
-> **Bild hinzufügen:** Screenshot der Fahrzeugliste bzw. des Erstellungsdialogs unter `docs/assets/screenshots/truck-management.png` speichern.
+> **Bild hinzufügen:** Screenshot der Fahrzeugliste bzw. des Erstellungsdialogs unter `assets/images/fahrzeugverwaltung.png` speichern.
 
 ---
 
@@ -74,9 +74,9 @@ Die gesamte Fahrzeugflotte erfassen und verwalten. Jeder Eintrag speichert Kennz
 
 Eine zentrale Kundendatenbank pflegen. Kunden werden mit Sendungen verknüpft – für lückenlose Nachverfolgung, Auswertungen und automatisches Vorausfüllen von Dokumenten.
 
-![Kundenverwaltung](docs/assets/screenshots/customer-management.png)
+![Kundenverwaltung](assets/images/kundenverwaltung.png)
 
-> **Bild hinzufügen:** Screenshot des Kundenerstellungs-Dialogs unter `docs/assets/screenshots/customer-management.png` speichern.
+> **Bild hinzufügen:** Screenshot des Kundenerstellungs-Dialogs unter `assets/images/kundenverwaltung.png` speichern.
 
 ---
 
@@ -84,9 +84,9 @@ Eine zentrale Kundendatenbank pflegen. Kunden werden mit Sendungen verknüpft �
 
 Einen Live-Überblick über den Betrieb erhalten. Das Dashboard zeigt Kennzahlen – offene Sendungen, zugewiesene Transporte, aktive Fahrzeuge und Lieferperformance – unterstützt durch eine vollständig sortier- und filterbare Datentabelle auf Basis von TanStack Table.
 
-![KPI-Dashboard](docs/assets/screenshots/kpi-dashboard.png)
+![KPI-Dashboard](assets/images/kpi-dashboard.png)
 
-> **Bild hinzufügen:** Screenshot der Dashboard-Übersicht mit KPI-Karten und Transporttabelle unter `docs/assets/screenshots/kpi-dashboard.png` speichern.
+> **Bild hinzufügen:** Screenshot der Dashboard-Übersicht mit KPI-Karten und Transporttabelle unter `assets/images/kpi-dashboard.png` speichern.
 
 ---
 
@@ -94,9 +94,9 @@ Einen Live-Überblick über den Betrieb erhalten. Das Dashboard zeigt Kennzahlen
 
 Sendungen per Drag-and-Drop Fahrzeugen zuweisen. Sendungen sind farblich nach Status kodiert und können innerhalb des Fahrzeugplans neu angeordnet werden. Das Dispositionspanel aktualisiert die Karte in Echtzeit.
 
-![Transportorganisation](docs/assets/screenshots/transport-organisation.png)
+![Transportorganisation](assets/images/transportorganisation.png)
 
-> **Bild hinzufügen:** Screenshot des Dispositionspanels mit sichtbaren Drag-and-Drop-Spalten unter `docs/assets/screenshots/transport-organisation.png` speichern.
+> **Bild hinzufügen:** Screenshot des Dispositionspanels mit sichtbaren Drag-and-Drop-Spalten unter `assets/images/transportorganisation.png` speichern.
 
 ---
 
@@ -104,9 +104,9 @@ Sendungen per Drag-and-Drop Fahrzeugen zuweisen. Sendungen sind farblich nach St
 
 Nach der Zuweisung berechnet TMS automatisch die optimale Route mithilfe der **OSRM**-Routing-Engine. Der berechnete Streckenverlauf wird als interaktiver Leaflet-Kartenoverlay dargestellt – inklusive Wegpunkten und Gesamtdistanz.
 
-![Routenberechnung](docs/assets/screenshots/route-calculation.png)
+![Routenberechnung](assets/images/route-calculation.png)
 
-> **Bild hinzufügen:** Screenshot der Versandnetz-Kartenansicht mit sichtbarer Routenlinie unter `docs/assets/screenshots/route-calculation.png` speichern.
+> **Bild hinzufügen:** Screenshot der Versandnetz-Kartenansicht mit sichtbarer Routenlinie unter `assets/images/route-calculation.png` speichern.
 
 ---
 
@@ -114,9 +114,9 @@ Nach der Zuweisung berechnet TMS automatisch die optimale Route mithilfe der **O
 
 Manuelle Arbeit reduzieren, indem Sendungen als wiederkehrende Aufträge angelegt werden. Ein Wiederholungsmuster (täglich, wöchentlich, benutzerdefinierte Intervalle) festlegen – TMS generiert zukünftige Sendungen automatisch und hält das Planungsboard stets aktuell.
 
-![Wiederkehrende Aufträge](docs/assets/screenshots/wiederkehrende-auftraege.png)
+![Wiederkehrende Aufträge](assets/images/wiederkehrende-auftraege.png)
 
-> **Bild hinzufügen:** Screenshot der Wiederholungs-/Vorlagenkonfiguration unter `docs/assets/screenshots/wiederkehrende-auftraege.png` speichern.
+> **Bild hinzufügen:** Screenshot der Wiederholungs-/Vorlagenkonfiguration unter `assets/images/wiederkehrende-auftraege.png` speichern.
 
 ---
 
@@ -124,9 +124,9 @@ Manuelle Arbeit reduzieren, indem Sendungen als wiederkehrende Aufträge angeleg
 
 Lieferfotos, CMR-Scans oder Schadensdokumentationen direkt an eine Sendung anhängen. Bilder werden sicher über Supabase Storage gespeichert und sind inline im Sendungsdetail-Panel abrufbar.
 
-![Bildupload](docs/assets/screenshots/image-upload.png)
+![Bildupload](assets/images/image-upload.png)
 
-> **Bild hinzufügen:** Screenshot der Bildupload-Komponente in der Sendungsdetailansicht unter `docs/assets/screenshots/image-upload.png` speichern.
+> **Bild hinzufügen:** Screenshot der Bildupload-Komponente in der Sendungsdetailansicht unter `assets/images/image-upload.png` speichern.
 
 ---
 
