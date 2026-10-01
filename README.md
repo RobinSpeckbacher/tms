@@ -73,7 +73,6 @@ Eine zentrale Kundendatenbank pflegen. Kunden werden mit Sendungen verknüpft �
 
 ![Kundenverwaltung](assets/images/kundenverwaltung.png)
 
-> **Bild hinzufügen:** Screenshot des Kundenerstellungs-Dialogs unter `assets/images/kundenverwaltung.png` speichern.
 
 ---
 
@@ -101,7 +100,6 @@ Nach der Zuweisung berechnet TMS automatisch die optimale Route mithilfe der **O
 
 ![Routenberechnung](assets/images/route-calculation.png)
 
-> **Bild hinzufügen:** Screenshot der Versandnetz-Kartenansicht mit sichtbarer Routenlinie unter `assets/images/route-calculation.png` speichern.
 
 ---
 
