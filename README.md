@@ -17,7 +17,6 @@
 
 [![Demo ansehen](assets/images/kpi-dashboard.png)](assets/videos/showCase.mp4)
 
-*Klick auf das Vorschaubild öffnet `assets/videos/showCase.mp4`. Für **Inline-Wiedergabe** auf GitHub: Video in ein Issue/PR ziehen und die generierte `https://github.com/user-attachments/...`-URL hier einfügen.*
 
 ---
 
@@ -56,7 +55,6 @@ Detaillierte Sendungen in Sekunden anlegen. Be- und Entladeorte, Frachtdaten (Ge
 
 ![Sendungserstellung](assets/images/sendungserstellung.png)
 
-> **Bild hinzufügen:** Screenshot des Sendungserstellungs-Modals aufnehmen und unter `assets/images/sendungserstellung.png` speichern.
 
 ---
 
@@ -66,7 +64,6 @@ Die gesamte Fahrzeugflotte erfassen und verwalten. Jeder Eintrag speichert Kennz
 
 ![Fahrzeugverwaltung](assets/images/fahrzeugverwaltung.png)
 
-> **Bild hinzufügen:** Screenshot der Fahrzeugliste bzw. des Erstellungsdialogs unter `assets/images/fahrzeugverwaltung.png` speichern.
 
 ---
 
@@ -86,7 +83,6 @@ Einen Live-Überblick über den Betrieb erhalten. Das Dashboard zeigt Kennzahlen
 
 ![KPI-Dashboard](assets/images/kpi-dashboard.png)
 
-> **Bild hinzufügen:** Screenshot der Dashboard-Übersicht mit KPI-Karten und Transporttabelle unter `assets/images/kpi-dashboard.png` speichern.
 
 ---
 
@@ -96,7 +92,6 @@ Sendungen per Drag-and-Drop Fahrzeugen zuweisen. Sendungen sind farblich nach St
 
 ![Transportorganisation](assets/images/transportorganisation.png)
 
-> **Bild hinzufügen:** Screenshot des Dispositionspanels mit sichtbaren Drag-and-Drop-Spalten unter `assets/images/transportorganisation.png` speichern.
 
 ---
 
@@ -116,7 +111,6 @@ Manuelle Arbeit reduzieren, indem Sendungen als wiederkehrende Aufträge angeleg
 
 ![Wiederkehrende Aufträge](assets/images/wiederkehrende-auftraege.png)
 
-> **Bild hinzufügen:** Screenshot der Wiederholungs-/Vorlagenkonfiguration unter `assets/images/wiederkehrende-auftraege.png` speichern.
 
 ---
 
@@ -126,7 +120,6 @@ Lieferfotos, CMR-Scans oder Schadensdokumentationen direkt an eine Sendung anhä
 
 ![Bildupload](assets/images/image-upload.png)
 
-> **Bild hinzufügen:** Screenshot der Bildupload-Komponente in der Sendungsdetailansicht unter `assets/images/image-upload.png` speichern.
 
 ---
 
